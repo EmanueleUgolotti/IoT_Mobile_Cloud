@@ -1,0 +1,54 @@
+# ---------- Python (backend, ML, robustness, experiments) ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+*.ipynb_checkpoints/
+.pytest_cache/
+
+# ---------- Modelli e dati (potenzialmente pesanti) ----------
+models/*.h5
+models/*.tflite
+models/*.pb
+models/checkpoints/
+*.npz
+*.csv
+!docs/**/*.csv
+datasets/
+
+# ---------- Docker ----------
+docker/**/.env
+*.env
+
+# ---------- Android ----------
+android/.gradle/
+android/build/
+android/*/build/
+android/.idea/
+android/*.iml
+android/local.properties
+android/captures/
+android/.cxx/
+
+# ---------- ESP32 / Arduino / PlatformIO ----------
+esp32/**/.pio/
+esp32/**/build/
+esp32/**/.vscode/
+*.bin
+*.elf
+
+# ---------- Editor / OS ----------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---------- Log e output generici ----------
+*.log
+logs/
+output/
+results/

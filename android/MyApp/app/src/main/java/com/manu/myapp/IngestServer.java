@@ -4,7 +4,6 @@ import fi.iki.elonen.NanoHTTPD;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,6 +33,10 @@ public class IngestServer extends NanoHTTPD {
 
         try {
             String body = readRequestBody(session);
+            if (body == null || body.isEmpty()) {
+                return jsonError(Response.Status.BAD_REQUEST, "Empty request body");
+            }
+
             JSONObject json = new JSONObject(body);
 
             String mode = json.optString("mode", null);
@@ -45,17 +48,17 @@ public class IngestServer extends NanoHTTPD {
             String[] requiredCommon = {"request_id", "node_id", "seq_num", "gateway_timestamp"};
             for (String field : requiredCommon) {
                 if (!json.has(field)) {
-                    return jsonError(Response.Status.UNPROCESSABLE_ENTITY, "Missing field: " + field);
+                    return jsonError(Response.Status.BAD_REQUEST, "Missing field: " + field);
                 }
             }
 
             if (mode.equals("reference")) {
                 if (!json.has("image_ref") || !json.has("dataset_id")) {
-                    return jsonError(Response.Status.UNPROCESSABLE_ENTITY, "Missing image_ref or dataset_id");
+                    return jsonError(Response.Status.BAD_REQUEST, "Missing image_ref or dataset_id");
                 }
             } else { // captured
                 if (!json.has("capture_id") || !json.has("image_data")) {
-                    return jsonError(Response.Status.UNPROCESSABLE_ENTITY, "Missing capture_id or image_data");
+                    return jsonError(Response.Status.BAD_REQUEST, "Missing capture_id or image_data");
                 }
             }
 
@@ -76,10 +79,7 @@ public class IngestServer extends NanoHTTPD {
     private String readRequestBody(IHTTPSession session) throws IOException, ResponseException {
         Map<String, String> files = new HashMap<>();
         session.parseBody(files);
-        // NanoHTTPD mette il body grezzo nella chiave "postData" per POST non-form
-        String body = session.getQueryParameterString();
-        // Fallback: leggiamo direttamente dagli header/parametri già parsati da parseBody
-        return files.containsKey("postData") ? files.get("postData") : (body != null ? body : "");
+        return files.get("postData");
     }
 
     private Response jsonError(Response.Status status, String detail) {

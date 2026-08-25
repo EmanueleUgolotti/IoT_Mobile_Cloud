@@ -33,13 +33,19 @@ creeremo.
 
 ## App Mobile
 
-- ⬜ **Ricezione dati dal gateway** (via WiFi/HTTP, quando il gateway decide
-  di mandare al mobile invece che al cloud)
-  → `android/`
-- ⬜ **Preprocessing dell'immagine**
-  → `android/`
-- ⬜ **Inferenza locale con TensorFlow Lite**
-  → `android/`, più il modello convertito in `models/`
+- ✅ **Ricezione dati dal gateway** — server HTTP embedded (NanoHTTPD) che
+  espone `/mobile/ingest`, stesso schema JSON del backend cloud. Validato
+  con richiesta di test (via `adb forward` + curl). Testato e funzionante.
+  `android/app/src/main/java/com/manu/myapp/IngestServer.java`,
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica),
+  `android/app/build.gradle` (dipendenza NanoHTTPD),
+  `android/app/src/main/AndroidManifest.xml` (permesso INTERNET)
+
+  il telefono ora ha un piccolo server integrato (IngestServer.java) che ascolta sulla porta 8080 esattamente come fa il backend cloud — riceve la stessa struttura di richiesta, la valida, e (per ora) la stampa nel log. Non guarda ancora dentro l'immagine.
+
+
+✅ Preprocessing dell'immagine + Inferenza locale con TensorFlow Lite — modello VGG16 convertito in .tflite, integrato nell'app: decodifica immagine ricevuta (modalità captured), preprocessing identico al training (conversione RGB→BGR + sottrazione media ImageNet, NON /255), esecuzione modello, log del risultato. Verificato che .tflite e .keras diano risultati equivalenti prima dell'integrazione. android/app/src/main/java/com/manu/myapp/Classifier.java, android/app/src/main/java/com/manu/myapp/MainActivity.java (modifica), android/app/src/main/assets/bpa_vgg16.tflite, android/app/build.gradle (dipendenze TensorFlow Lite), models/bpa_vgg16.tflite (sorgente del modello), experiments/convert_to_tflite.py, experiments/test_tflite_inference.py, experiments/test_keras_inference.py, experiments/requirements.txt, experiments/make_captured_test_request.py (script di test end-to-end)
+
 - ⬜ **Visualizzazione del risultato** (che tipo di macchia ha riconosciuto)
   → `android/`
 

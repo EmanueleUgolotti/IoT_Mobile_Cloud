@@ -1,6 +1,10 @@
 package com.manu.myapp;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Base64;
+import android.util.Log;
 
 import androidx.activity.EdgeToEdge;
 
@@ -20,9 +24,19 @@ import com.manu.myapp.databinding.ActivityMainBinding;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import org.json.JSONObject;
+
+import java.io.IOException;
+
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "BPA_IngestServer";
+    private static final int SERVER_PORT = 8080;
+    private static final String MODEL_FILE = "bpa_vgg16.tflite";
+
     private AppBarConfiguration appBarConfiguration;
+    private IngestServer server;
+    private Classifier classifier;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,20 +68,89 @@ public class MainActivity extends AppCompatActivity {
                         .setAnchorView(R.id.fab)
                         .setAction("Action", null).show()
         );
+
+        // --- Caricamento del classificatore ---
+        try {
+            classifier = new Classifier(getAssets(), MODEL_FILE);
+            Log.i(TAG, "Modello caricato correttamente: " + MODEL_FILE);
+        } catch (IOException e) {
+            Log.e(TAG, "Errore caricamento modello", e);
+        }
+
+        // --- Avvio del server di ricezione acquisizioni ---
+        server = new IngestServer(SERVER_PORT, this::handleIngest);
+
+        try {
+            server.start();
+            Log.i(TAG, "Server avviato sulla porta " + SERVER_PORT);
+        } catch (Exception e) {
+            Log.e(TAG, "Errore avvio server", e);
+        }
+    }
+
+    /**
+     * Gestisce un'acquisizione ricevuta dal gateway.
+     * mode "captured": l'immagine e' gia' nel payload (base64), classifichiamo subito.
+     * mode "reference": richiede di recuperare l'immagine da uno storage condiviso -
+     *   non ancora implementato (serve un endpoint dedicato lato backend). TODO.
+     */
+    private void handleIngest(JSONObject payload) {
+        Log.i(TAG, "Ricevuta acquisizione: " + payload.toString());
+
+        String mode = payload.optString("mode", "");
+
+        if ("captured".equals(mode)) {
+            classifyCaptured(payload);
+        } else if ("reference".equals(mode)) {
+            Log.w(TAG, "Modalita' 'reference' non ancora gestita lato mobile " +
+                    "(richiede un endpoint per recuperare l'immagine dal dataset condiviso).");
+        }
+    }
+
+    private void classifyCaptured(JSONObject payload) {
+        if (classifier == null) {
+            Log.e(TAG, "Classificatore non disponibile, impossibile classificare.");
+            return;
+        }
+
+        try {
+            String imageDataBase64 = payload.getString("image_data");
+            byte[] imageBytes = Base64.decode(imageDataBase64, Base64.DEFAULT);
+            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+
+            if (bitmap == null) {
+                Log.e(TAG, "Impossibile decodificare l'immagine ricevuta.");
+                return;
+            }
+
+            Classifier.Result result = classifier.classify(bitmap);
+            Log.i(TAG, "Classificazione: " + result.predictedLabel +
+                    " (confidenza " + result.confidence + ")");
+
+        } catch (Exception e) {
+            Log.e(TAG, "Errore durante la classificazione", e);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (server != null) {
+            server.stop();
+        }
+        if (classifier != null) {
+            classifier.close();
+        }
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement

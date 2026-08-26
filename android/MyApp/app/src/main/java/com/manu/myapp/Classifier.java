@@ -18,8 +18,11 @@ import java.nio.channels.FileChannel;
  *
  * Preprocessing: replica ESATTAMENTE quello usato in training
  * (tensorflow.keras.applications.vgg16.preprocess_input, modalita' 'caffe'):
- *   1. Conversione RGB -> BGR
- *   2. Sottrazione della media ImageNet per canale (NON normalizzazione /255)
+ *   1. Ridimensionamento BICUBICO a 224x224 (stesso algoritmo di default
+ *      usato da PIL/Pillow in Python, per allineare i risultati tra
+ *      l'app mobile e gli script Python usati per gli esperimenti)
+ *   2. Conversione RGB -> BGR
+ *   3. Sottrazione della media ImageNet per canale (NON normalizzazione /255)
  *      B -= 103.939, G -= 116.779, R -= 123.68
  *
  * Ordine delle classi confermato da class_indices.json del training:
@@ -39,6 +42,9 @@ public class Classifier {
     private static final float MEAN_B = 103.939f;
     private static final float MEAN_G = 116.779f;
     private static final float MEAN_R = 123.68f;
+
+    // Parametro 'a' della convoluzione cubica usato da PIL/Pillow per BICUBIC
+    private static final double CUBIC_A = -0.5;
 
     private final Interpreter interpreter;
 
@@ -79,16 +85,13 @@ public class Classifier {
     }
 
     private ByteBuffer preprocess(Bitmap bitmap) {
-        Bitmap resized = Bitmap.createScaledBitmap(bitmap, IMG_SIZE, IMG_SIZE, true);
+        int[] resizedPixels = bicubicResize(bitmap, IMG_SIZE, IMG_SIZE);
 
         ByteBuffer buffer = ByteBuffer.allocateDirect(
                 IMG_SIZE * IMG_SIZE * NUM_CHANNELS * BYTES_PER_FLOAT);
         buffer.order(ByteOrder.nativeOrder());
 
-        int[] pixels = new int[IMG_SIZE * IMG_SIZE];
-        resized.getPixels(pixels, 0, IMG_SIZE, 0, 0, IMG_SIZE, IMG_SIZE);
-
-        for (int pixel : pixels) {
+        for (int pixel : resizedPixels) {
             float r = (pixel >> 16) & 0xFF;
             float g = (pixel >> 8) & 0xFF;
             float b = pixel & 0xFF;
@@ -101,6 +104,78 @@ public class Classifier {
 
         buffer.rewind();
         return buffer;
+    }
+
+    /**
+     * Ridimensionamento bicubico, equivalente all'algoritmo di default usato
+     * da PIL/Pillow (Image.resize senza parametro resample esplicito).
+     * Android non offre un bicubico integrato (Bitmap.createScaledBitmap fa
+     * solo bilineare), quindi lo implementiamo manualmente per allineare i
+     * risultati tra app mobile e script Python.
+     */
+    private int[] bicubicResize(Bitmap src, int dstWidth, int dstHeight) {
+        int srcWidth = src.getWidth();
+        int srcHeight = src.getHeight();
+
+        int[] srcPixels = new int[srcWidth * srcHeight];
+        src.getPixels(srcPixels, 0, srcWidth, 0, 0, srcWidth, srcHeight);
+
+        int[] dstPixels = new int[dstWidth * dstHeight];
+
+        double scaleX = (double) srcWidth / dstWidth;
+        double scaleY = (double) srcHeight / dstHeight;
+
+        for (int dy = 0; dy < dstHeight; dy++) {
+            double srcY = (dy + 0.5) * scaleY - 0.5;
+            int y0 = (int) Math.floor(srcY);
+            double fy = srcY - y0;
+
+            for (int dx = 0; dx < dstWidth; dx++) {
+                double srcX = (dx + 0.5) * scaleX - 0.5;
+                int x0 = (int) Math.floor(srcX);
+                double fx = srcX - x0;
+
+                double r = 0, g = 0, b = 0;
+
+                for (int m = -1; m <= 2; m++) {
+                    int yy = clamp(y0 + m, 0, srcHeight - 1);
+                    double wy = cubicWeight(m - fy);
+
+                    for (int n = -1; n <= 2; n++) {
+                        int xx = clamp(x0 + n, 0, srcWidth - 1);
+                        double wx = cubicWeight(n - fx);
+                        double w = wx * wy;
+
+                        int pixel = srcPixels[yy * srcWidth + xx];
+                        r += w * ((pixel >> 16) & 0xFF);
+                        g += w * ((pixel >> 8) & 0xFF);
+                        b += w * (pixel & 0xFF);
+                    }
+                }
+
+                int ri = clamp((int) Math.round(r), 0, 255);
+                int gi = clamp((int) Math.round(g), 0, 255);
+                int bi = clamp((int) Math.round(b), 0, 255);
+
+                dstPixels[dy * dstWidth + dx] = 0xFF000000 | (ri << 16) | (gi << 8) | bi;
+            }
+        }
+
+        return dstPixels;
+    }
+
+    private double cubicWeight(double t) {
+        double x = Math.abs(t);
+        if (x <= 1.0) {
+            return (CUBIC_A + 2) * x * x * x - (CUBIC_A + 3) * x * x + 1;
+        } else if (x < 2.0) {
+            return CUBIC_A * x * x * x - 5 * CUBIC_A * x * x + 8 * CUBIC_A * x - 4 * CUBIC_A;
+        }
+        return 0.0;
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private MappedByteBuffer loadModelFile(AssetManager assetManager, String modelFileName) throws IOException {

@@ -9,8 +9,20 @@
     <string name="action_settings">Impostazioni</string>
 
     <!-- Home -->
-    <string name="home_server_status_placeholder">Stato server: in attesa…</string>
+    <string name="home_section_server">Stato server</string>
+    <string name="home_server_status_placeholder">In attesa…</string>
+    <string name="home_server_status_running">In ascolto sulla porta %1$d</string>
+    <string name="home_server_status_stopped">Server non attivo</string>
+    <string name="home_section_last_result">Ultimo risultato</string>
     <string name="home_last_result_placeholder">Nessun risultato ricevuto ancora</string>
+    <string name="home_confidence_format">Confidenza: %1$d%%</string>
+    <string name="home_source_format">Fonte: %1$s — ore %2$s</string>
+    <string name="home_tap_for_details">Tocca per vedere immagine e dettagli</string>
+
+    <!-- Dettaglio risultato -->
+    <string name="detail_title">Dettaglio risultato</string>
+    <string name="detail_image_description">Immagine analizzata</string>
+    <string name="detail_section_probabilities">Probabilità per classe</string>
 
     <!-- Cronologia -->
     <string name="history_placeholder">Cronologia delle classificazioni</string>

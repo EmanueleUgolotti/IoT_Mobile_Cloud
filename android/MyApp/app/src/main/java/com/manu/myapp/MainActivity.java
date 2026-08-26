@@ -26,6 +26,9 @@ import java.io.IOException;
  * Activity principale: ospita la Bottom Navigation (Home, Cronologia,
  * Test manuale, Profilo) e mantiene in esecuzione, per tutta la vita
  * dell'app, il server di ricezione acquisizioni e il classificatore.
+ *
+ * Pubblica lo stato del server e i risultati di classificazione tramite
+ * AppState, cosi' le schermate (es. Home) possono mostrarli in tempo reale.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -76,8 +79,11 @@ public class MainActivity extends AppCompatActivity {
         try {
             server.start();
             Log.i(TAG, "Server avviato sulla porta " + SERVER_PORT);
+            AppState.getInstance().serverRunning.postValue(true);
+            AppState.getInstance().serverPort.postValue(SERVER_PORT);
         } catch (Exception e) {
             Log.e(TAG, "Errore avvio server", e);
+            AppState.getInstance().serverRunning.postValue(false);
         }
     }
 
@@ -120,6 +126,19 @@ public class MainActivity extends AppCompatActivity {
             Log.i(TAG, "Classificazione: " + result.predictedLabel +
                     " (confidenza " + result.confidence + ")");
 
+            String fileName = payload.optString("capture_id", "sconosciuto");
+
+            AppState.LastResult lastResult = new AppState.LastResult(
+                    bitmap,
+                    fileName,
+                    result.predictedLabel,
+                    result.confidence,
+                    result.probabilities,
+                    "Mobile",
+                    System.currentTimeMillis()
+            );
+            AppState.getInstance().lastResult.postValue(lastResult);
+
         } catch (Exception e) {
             Log.e(TAG, "Errore durante la classificazione", e);
         }
@@ -130,6 +149,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         if (server != null) {
             server.stop();
+            AppState.getInstance().serverRunning.postValue(false);
         }
         if (classifier != null) {
             classifier.close();

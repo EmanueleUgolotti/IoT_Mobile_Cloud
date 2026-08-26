@@ -1,175 +1,56 @@
-package com.manu.myapp;
+"""
+Genera un file JSON di payload e il comando curl per testare l'endpoint
+/mobile/ingest in modalita' 'captured': legge un'immagine reale, la
+codifica in base64, e salva il payload completo su file (il comando da
+incollare a mano diventerebbe enorme e scomodo).
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.os.Bundle;
-import android.util.Base64;
-import android.util.Log;
+Simula quello che il Gateway (ESP32 #2) manderebbe al telefono quando
+riceve un'immagine scattata dalla webcam dell'ESP32-CAM (nodo #1).
 
-import androidx.activity.EdgeToEdge;
+Esecuzione:
+    python make_captured_test_request.py --image /percorso/a/immagine.jpg
+"""
 
-import com.google.android.material.snackbar.Snackbar;
+import argparse
+import base64
+import json
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import androidx.navigation.NavController;
-import androidx.navigation.ui.AppBarConfiguration;
-import androidx.navigation.ui.NavigationUI;
-import androidx.navigation.fragment.NavHostFragment;
 
-import com.manu.myapp.databinding.ActivityMainBinding;
+def main():
+    parser = argparse.ArgumentParser(
+        description="Genera un payload JSON e comando curl per /mobile/ingest (captured)"
+    )
+    parser.add_argument("--image", required=True, help="Percorso a un'immagine di test")
+    parser.add_argument("--port", default=8080, help="Porta del server sul telefono (default 8080)")
+    parser.add_argument("--capture-id", default="cap-test-001", help="Identificativo della cattura")
+    parser.add_argument("--output", default="captured_payload.json", help="File JSON di output")
+    args = parser.parse_args()
 
-import android.view.Menu;
-import android.view.MenuItem;
+    with open(args.image, "rb") as f:
+        image_bytes = f.read()
 
-import org.json.JSONObject;
+    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-import java.io.IOException;
-
-public class MainActivity extends AppCompatActivity {
-
-    private static final String TAG = "BPA_IngestServer";
-    private static final int SERVER_PORT = 8080;
-    private static final String MODEL_FILE = "bpa_vgg16.tflite";
-
-    private AppBarConfiguration appBarConfiguration;
-    private IngestServer server;
-    private Classifier classifier;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
-
-        ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
-
-        ViewCompat.setOnApplyWindowInsetsListener(binding.main, (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
-        setSupportActionBar(binding.toolbar);
-
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.nav_host_fragment_content_main);
-
-        if (navHostFragment != null) {
-            NavController navController = navHostFragment.getNavController();
-
-            appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
-            NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
-        }
-
-        binding.fab.setOnClickListener(
-                view -> Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAnchorView(R.id.fab)
-                        .setAction("Action", null).show()
-        );
-
-        // --- Caricamento del classificatore ---
-        try {
-            classifier = new Classifier(getAssets(), MODEL_FILE);
-            Log.i(TAG, "Modello caricato correttamente: " + MODEL_FILE);
-        } catch (IOException e) {
-            Log.e(TAG, "Errore caricamento modello", e);
-        }
-
-        // --- Avvio del server di ricezione acquisizioni ---
-        server = new IngestServer(SERVER_PORT, this::handleIngest);
-
-        try {
-            server.start();
-            Log.i(TAG, "Server avviato sulla porta " + SERVER_PORT);
-        } catch (Exception e) {
-            Log.e(TAG, "Errore avvio server", e);
-        }
+    payload = {
+        "request_id": "gw01-000099",
+        "mode": "captured",
+        "node_id": 1,
+        "seq_num": 99,
+        "gateway_timestamp": "2026-08-19T10:00:00Z",
+        "capture_id": args.capture_id,
+        "image_data": image_b64,
+        "retry_attempt": 0,
     }
 
-    /**
-     * Gestisce un'acquisizione ricevuta dal gateway.
-     * mode "captured": l'immagine e' gia' nel payload (base64), classifichiamo subito.
-     * mode "reference": richiede di recuperare l'immagine da uno storage condiviso -
-     *   non ancora implementato (serve un endpoint dedicato lato backend). TODO.
-     */
-    private void handleIngest(JSONObject payload) {
-        Log.i(TAG, "Ricevuta acquisizione: " + payload.toString());
+    with open(args.output, "w") as f:
+        json.dump(payload, f)
 
-        String mode = payload.optString("mode", "");
+    print(f"Payload salvato in: {args.output} ({len(image_b64)} caratteri base64)\n")
+    print("Comando curl da eseguire:\n")
+    print(f"curl -X POST http://localhost:{args.port}/mobile/ingest \\")
+    print("  -H \"Content-Type: application/json\" \\")
+    print(f"  -d @{args.output}")
 
-        if ("captured".equals(mode)) {
-            classifyCaptured(payload);
-        } else if ("reference".equals(mode)) {
-            Log.w(TAG, "Modalita' 'reference' non ancora gestita lato mobile " +
-                    "(richiede un endpoint per recuperare l'immagine dal dataset condiviso).");
-        }
-    }
 
-    private void classifyCaptured(JSONObject payload) {
-        if (classifier == null) {
-            Log.e(TAG, "Classificatore non disponibile, impossibile classificare.");
-            return;
-        }
-
-        try {
-            String imageDataBase64 = payload.getString("image_data");
-            byte[] imageBytes = Base64.decode(imageDataBase64, Base64.DEFAULT);
-            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
-
-            if (bitmap == null) {
-                Log.e(TAG, "Impossibile decodificare l'immagine ricevuta.");
-                return;
-            }
-
-            Classifier.Result result = classifier.classify(bitmap);
-            Log.i(TAG, "Classificazione: " + result.predictedLabel +
-                    " (confidenza " + result.confidence + ")");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Errore durante la classificazione", e);
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (server != null) {
-            server.stop();
-        }
-        if (classifier != null) {
-            classifier.close();
-        }
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.nav_host_fragment_content_main);
-        boolean handled = false;
-        if (navHostFragment != null) {
-            NavController navController = navHostFragment.getNavController();
-            handled = NavigationUI.navigateUp(navController, appBarConfiguration);
-        }
-        return handled || super.onSupportNavigateUp();
-    }
-}
+if __name__ == "__main__":
+    main()

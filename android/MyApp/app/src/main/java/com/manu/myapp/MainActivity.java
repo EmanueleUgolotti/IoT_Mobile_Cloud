@@ -20,7 +20,10 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.UUID;
 
 /**
  * Activity principale: ospita la Bottom Navigation (Home, Cronologia,
@@ -39,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private IngestServer server;
     private Classifier classifier;
     private NavController navController;
+    private HistoryDbHelper historyDb;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +76,8 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             Log.e(TAG, "Errore caricamento modello", e);
         }
+
+        historyDb = new HistoryDbHelper(this);
 
         // --- Avvio del server di ricezione acquisizioni ---
         server = new IngestServer(SERVER_PORT, this::handleIngest);
@@ -127,6 +133,13 @@ public class MainActivity extends AppCompatActivity {
                     " (confidenza " + result.confidence + ")");
 
             String fileName = payload.optString("capture_id", "sconosciuto");
+            long timestamp = System.currentTimeMillis();
+            String imagePath = saveImageToInternalStorage(bitmap, fileName);
+
+            // Salvataggio persistente in cronologia (fuori dal thread UI,
+            // siamo gia' nel thread del server NanoHTTPD)
+            historyDb.insert(fileName, result.predictedLabel, result.confidence,
+                    result.probabilities, "Mobile", timestamp, imagePath);
 
             AppState.LastResult lastResult = new AppState.LastResult(
                     bitmap,
@@ -135,13 +148,32 @@ public class MainActivity extends AppCompatActivity {
                     result.confidence,
                     result.probabilities,
                     "Mobile",
-                    System.currentTimeMillis()
+                    timestamp
             );
             AppState.getInstance().lastResult.postValue(lastResult);
 
         } catch (Exception e) {
             Log.e(TAG, "Errore durante la classificazione", e);
         }
+    }
+
+    private String saveImageToInternalStorage(Bitmap bitmap, String baseName) {
+        File dir = new File(getFilesDir(), "history_images");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        String safeFileName = baseName + "_" + UUID.randomUUID().toString().substring(0, 8) + ".jpg";
+        File imageFile = new File(dir, safeFileName);
+
+        try (FileOutputStream out = new FileOutputStream(imageFile)) {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
+        } catch (IOException e) {
+            Log.e(TAG, "Errore salvataggio immagine su storage interno", e);
+            return null;
+        }
+
+        return imageFile.getAbsolutePath();
     }
 
     @Override

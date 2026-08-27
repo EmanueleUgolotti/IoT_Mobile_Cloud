@@ -26,6 +26,7 @@
 
     <!-- Cronologia -->
     <string name="history_placeholder">Cronologia delle classificazioni</string>
+    <string name="history_thumbnail_description">Anteprima immagine</string>
 
     <!-- Test manuale -->
     <string name="manual_test_pick_image">Scegli immagine</string>

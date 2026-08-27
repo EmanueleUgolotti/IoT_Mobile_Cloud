@@ -146,3 +146,67 @@ scelto di implementare il grafico a barre con componenti Android nativi
 libreria di charting (es. MPAndroidChart) — evita di riesporsi al rischio
 di conflitti di build per un componente visivamente semplice che non lo
 giustifica.
+
+## 12. Cronologia: perché SQLite nativo (non Room), e perché le immagini non stanno nel database
+ 
+**Il bisogno**: la Home teneva solo l'ultimo risultato, in memoria
+(`AppState`) — sparisce alla chiusura dell'app. La Cronologia richiede
+persistenza reale, che sopravviva al riavvio.
+ 
+**Perché SQLite nativo (`SQLiteOpenHelper`) e non Room**: Room è la
+libreria standard moderna per database locali su Android, ma richiede un
+annotation processor (`kapt`/`annotationProcessor`) come dipendenza
+Gradle aggiuntiva. Dato quanto tempo era già stato speso a risolvere
+conflitti di dipendenze con TensorFlow Lite (vedi punto 5-6), ho
+scelto di restare su `SQLiteOpenHelper`, incluso nativamente in Android
+senza aggiungere nessuna dipendenza — più verboso da scrivere a mano, ma
+zero rischio di nuovi conflitti di build.
+ 
+**Perché le immagini sono file, non righe del database**: un database
+relazionale è pensato per dati strutturati piccoli (numeri, stringhe),
+non per BLOB di alcuni MB come una foto. Le immagini vengono salvate
+come file JPEG nello storage interno dell'app (`getFilesDir()`,
+cartella `history_images/`); il database tiene solo il **percorso** del
+file, non i byte dell'immagine.
+ 
+## 13. Perché la Cronologia è divisa in HistoryItem / HistoryDbHelper / HistoryAdapter
+ 
+Tre responsabilità separate, pattern standard Android:
+ 
+- **`HistoryItem`**: solo un contenitore di dati (id, nome file, classe,
+  confidenza, probabilità, fonte, timestamp, percorso immagine) — nessuna
+  logica, serve solo a passare i dati da un pezzo all'altro in modo
+  ordinato
+- **`HistoryDbHelper`**: unico punto che parla con il database SQLite —
+  sa come salvare (`insert`) e leggere (`getAll`) i record. Se in futuro
+  si cambiasse tecnologia di persistenza (es. verso Room), è l'unico
+  file da riscrivere: il resto dell'app continuerebbe a ricevere
+  `HistoryItem`, senza saperne l'origine
+- **`HistoryAdapter`**: traduce la lista di `HistoryItem` in righe visive
+  nella `RecyclerView` (la lista scorrevole della schermata Cronologia)
+  — sa come disegnare una riga, non sa nulla di database
+Questa separazione (dati / accesso ai dati / visualizzazione) evita che
+`HistoryFragment` debba occuparsi sia di leggere il database sia di
+disegnare la lista sia di gestire i click — ogni pezzo ha un solo
+compito, più facile da modificare o testare in isolamento.
+ 
+## 14. Perché la lettura del database avviene su un thread separato
+ 
+Leggere da un database, anche locale, è un'operazione potenzialmente
+lenta (I/O su disco). Se fatta sul thread principale (quello che disegna
+l'interfaccia), l'app si blocca visibilmente per la durata della lettura
+— con dataset piccoli non si nota, ma è comunque la pratica corretta e
+diventa necessaria se la cronologia crescerà. `HistoryFragment` usa un
+`ExecutorService` per leggere in background, poi torna al thread
+principale solo per aggiornare la lista visibile.
+ 
+## 15. Perché ResultDetailActivity ora legge da due fonti diverse (AppState o Intent)
+ 
+Il dettaglio serve in due situazioni diverse: aperto dalla Home (sempre
+"l'ultimo risultato", già disponibile in `AppState`) o aperto dalla
+Cronologia (un risultato passato qualsiasi, che deve arrivare da fuori,
+via `Intent`). Invece di duplicare la schermata di dettaglio in due
+Activity quasi identiche, `ResultDetailActivity` controlla se l'Intent
+contiene dati (`EXTRA_LABEL` presente) — se sì li usa (caso Cronologia),
+altrimenti ricade su `AppState.lastResult` (caso Home). Un solo file,
+riusato per entrambi i percorsi.

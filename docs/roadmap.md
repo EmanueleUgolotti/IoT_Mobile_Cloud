@@ -86,9 +86,26 @@ creeremo.
   `android/app/src/main/res/layout/item_probability_bar.xml` (nuovo),
   `android/app/src/main/AndroidManifest.xml` (registrazione ResultDetailActivity),
   `android/app/src/main/res/values/strings.xml` (modifica)
-- ⬜ **Cronologia: lista classificazioni passate** (con anteprima immagine,
-  indicatore di confidenza, badge fonte Mobile/Cloud/Foto locale)
-  → `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java`
+- ✅ **Cronologia: lista classificazioni passate** — persistenza reale
+  (sopravvive alla chiusura dell'app) tramite database SQLite locale
+  nativo (nessuna libreria esterna come Room, per non riesporsi a
+  conflitti di dipendenze). Immagini salvate come file nello storage
+  interno, il database tiene solo i metadati e il percorso. Lista con
+  miniatura, nome file, classe, badge fonte, orario, confidenza; il
+  tocco su una riga apre lo stesso dettaglio (immagine + grafico
+  probabilità) già usato dalla Home, reso riutilizzabile per entrambi
+  i casi. Testato: i dati sopravvivono alla chiusura completa dell'app.
+  `android/app/src/main/java/com/manu/myapp/HistoryItem.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/HistoryDbHelper.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryAdapter.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java` (modifica),
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica,
+  salvataggio immagine su file + insert DB ad ogni classificazione),
+  `android/app/src/main/java/com/manu/myapp/ResultDetailActivity.java`
+  (modifica, ora accetta dati anche via Intent extras, non solo da AppState),
+  `android/app/src/main/res/layout/item_history_row.xml` (nuovo),
+  `android/app/src/main/res/layout/fragment_history.xml` (modifica),
+  `android/app/src/main/res/values/strings.xml` (modifica)
 - ⬜ **Test manuale: scatta/scegli foto e classifica subito**
   → `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`
 - ⬜ **Profilo utente locale** (nome utente salvato sul telefono, non

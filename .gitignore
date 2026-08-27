@@ -56,3 +56,8 @@ results/
 
 # ---------- models ----------
 models/*.keras
+
+
+# ---------- documenti e note ----------
+docs/note.txt
+

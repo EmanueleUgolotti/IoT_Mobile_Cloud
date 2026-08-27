@@ -155,6 +155,12 @@ creeremo.
   → `android/app/src/main/res/values/strings.xml`,
   `android/app/src/main/res/values-en/strings.xml`
 
+- ⬜ **Personalizzazione grafica** (colori, font, tema visivo — rimandata
+  deliberatamente a quando le funzionalità sono stabili, per non dover
+  ritoccare lo stile a ogni nuova schermata aggiunta)
+  → `android/app/src/main/res/values/colors.xml`,
+  `android/app/src/main/res/values/themes.xml`
+
 ## ESP32 #2 — Gateway
 
 - ⬜ **Ricezione pacchetti da ESP32 #1** (via ESP-NOW)

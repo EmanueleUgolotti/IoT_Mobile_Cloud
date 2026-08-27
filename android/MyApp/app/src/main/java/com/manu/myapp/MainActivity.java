@@ -1,10 +1,13 @@
 package com.manu.myapp;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -36,7 +39,6 @@ import java.util.UUID;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "BPA_IngestServer";
-    private static final int SERVER_PORT = 8080;
     private static final String MODEL_FILE = "bpa_vgg16.tflite";
 
     private IngestServer server;
@@ -81,13 +83,14 @@ public class MainActivity extends AppCompatActivity {
         historyDb = new HistoryDbHelper(this);
 
         // --- Avvio del server di ricezione acquisizioni ---
-        server = new IngestServer(SERVER_PORT, this::handleIngest);
+        int serverPort = SettingsManager.getPort(this);
+        server = new IngestServer(serverPort, this::handleIngest);
 
         try {
             server.start();
-            Log.i(TAG, "Server avviato sulla porta " + SERVER_PORT);
+            Log.i(TAG, "Server avviato sulla porta " + serverPort);
             AppState.getInstance().serverRunning.postValue(true);
-            AppState.getInstance().serverPort.postValue(SERVER_PORT);
+            AppState.getInstance().serverPort.postValue(serverPort);
         } catch (Exception e) {
             Log.e(TAG, "Errore avvio server", e);
             AppState.getInstance().serverRunning.postValue(false);
@@ -179,5 +182,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onSupportNavigateUp() {
         return (navController != null && navController.navigateUp()) || super.onSupportNavigateUp();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }

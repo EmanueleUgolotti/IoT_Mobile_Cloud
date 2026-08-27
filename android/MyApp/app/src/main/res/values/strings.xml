@@ -48,4 +48,18 @@
     <string name="profile_saved_confirmation">Profilo salvato</string>
     <string name="profile_note">Il nome viene usato solo per identificare le classificazioni fatte con "Test manuale" su questo dispositivo. Non è un account: nessuna password, nessun collegamento a un server.</string>
 
+    <!-- Impostazioni -->
+    <string name="settings_section_server">Server</string>
+    <string name="settings_port_hint">Porta (es. 8080)</string>
+    <string name="settings_port_note">La modifica ha effetto al prossimo riavvio dell\'app.</string>
+    <string name="settings_section_theme">Tema</string>
+    <string name="settings_theme_system">Segui il sistema</string>
+    <string name="settings_theme_light">Chiaro</string>
+    <string name="settings_theme_dark">Scuro</string>
+    <string name="settings_section_language">Lingua</string>
+    <string name="settings_language_it">Italiano</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_save">Salva</string>
+    <string name="settings_saved_confirmation">Impostazioni salvate</string>
+
 </resources>

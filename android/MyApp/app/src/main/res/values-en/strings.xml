@@ -1,0 +1,65 @@
+<resources>
+    <string name="app_name">MyApp</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_history">History</string>
+    <string name="nav_manual_test">Manual test</string>
+    <string name="nav_profile">Profile</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="home_section_server">Server status</string>
+    <string name="home_server_status_placeholder">Waiting…</string>
+    <string name="home_server_status_running">Listening on port %1$d</string>
+    <string name="home_server_status_stopped">Server not running</string>
+    <string name="home_section_last_result">Last result</string>
+    <string name="home_last_result_placeholder">No result received yet</string>
+    <string name="home_confidence_format">Confidence: %1$d%%</string>
+    <string name="home_source_format">Source: %1$s — %2$s</string>
+    <string name="home_tap_for_details">Tap to see image and details</string>
+
+    <!-- Result detail -->
+    <string name="detail_title">Result detail</string>
+    <string name="detail_image_description">Analyzed image</string>
+    <string name="detail_section_probabilities">Probability per class</string>
+
+    <!-- History -->
+    <string name="history_placeholder">Classification history</string>
+    <string name="history_thumbnail_description">Image preview</string>
+    <string name="history_delete_title">Delete this entry?</string>
+    <string name="history_delete_message">The classification of \"%1$s\" and its associated image will be deleted. This action cannot be undone.</string>
+    <string name="history_delete_confirm">Delete</string>
+    <string name="history_delete_cancel">Cancel</string>
+
+    <!-- Manual test -->
+    <string name="manual_test_pick_image">Choose from gallery</string>
+    <string name="manual_test_take_photo">Take photo</string>
+    <string name="manual_test_result_placeholder">No image selected</string>
+    <string name="manual_test_image_preview_description">Selected image preview</string>
+    <string name="manual_test_classifying">Classifying…</string>
+    <string name="manual_test_error">Error during classification</string>
+
+    <!-- Profile -->
+    <string name="profile_placeholder">User profile</string>
+    <string name="profile_section_name">User name</string>
+    <string name="profile_name_hint">Enter your name</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_saved_confirmation">Profile saved</string>
+    <string name="profile_note">The name is used only to identify classifications made with \"Manual test\" on this device. It is not an account: no password, no connection to a server.</string>
+
+    <!-- Settings -->
+    <string name="settings_section_server">Server</string>
+    <string name="settings_port_hint">Port (e.g. 8080)</string>
+    <string name="settings_port_note">The change takes effect the next time the app restarts.</string>
+    <string name="settings_section_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_section_language">Language</string>
+    <string name="settings_language_it">Italiano</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_saved_confirmation">Settings saved</string>
+
+</resources>

@@ -265,3 +265,16 @@ La conferma con dialogo (invece di cancellare subito al tocco lungo) è
 una misura di sicurezza minima contro tocchi accidentali, dato che
 l'operazione non è reversibile (elimina anche il file immagine, non solo
 il record).
+
+
+## 18. Perché la porta del server non cambia "a caldo"
+ 
+Il server (`IngestServer`) viene creato una sola volta in
+`MainActivity.onCreate` e resta attivo per tutta la vita del processo
+app. Riconfigurarlo su una porta diversa mentre e' gia' in ascolto
+richiederebbe fermarlo e ricrearlo mentre l'app e' in esecuzione — con
+rischio di richieste a meta' o problemi di sincronizzazione con lo stato
+condiviso (`AppState`). Si e' scelto di limitare la modifica della porta
+a "effettiva al prossimo riavvio dell'app", dichiarato esplicitamente
+nell'interfaccia — piu' semplice e sicuro di gestire un riavvio del
+server a runtime

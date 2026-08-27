@@ -114,12 +114,10 @@ creeremo.
   scattate. Classificazione con lo stesso `Classifier` condiviso (via
   `AppState`), salvataggio in Cronologia con fonte "Foto locale"
   (distinta da "Mobile" per le acquisizioni dal gateway).
-  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`
-  (nuovo contenuto), `android/app/src/main/res/layout/fragment_manual_test.xml`
-  (modifica), `android/app/src/main/java/com/manu/myapp/ImageStorage.java`
-  (nuovo, utility condivisa di salvataggio immagini, estratta da MainActivity),
-  `android/app/src/main/java/com/manu/myapp/AppState.java` (modifica,
-  riferimento condiviso al classificatore),
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`   (nuovo contenuto), 
+  `android/app/src/main/res/layout/fragment_manual_test.xml`  (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ImageStorage.java`   (nuovo, utility condivisa di salvataggio immagini, estratta da MainActivity),
+  `android/app/src/main/java/com/manu/myapp/AppState.java` (modifica, riferimento condiviso al classificatore),
   `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica)
 - ✅ **Correzione OutOfMemoryError con immagini ad alta risoluzione** —
   immagini sorgente molto grandi (es. foto originali del dataset)
@@ -136,14 +134,21 @@ creeremo.
 - ✅ **Eliminazione voci dalla Cronologia** — tenendo premuto su una riga,
   con conferma, si elimina sia il record dal database sia il file
   immagine associato.
-  `android/app/src/main/java/com/manu/myapp/HistoryDbHelper.java` (modifica,
-  metodo `delete`), `android/app/src/main/java/com/manu/myapp/ui/HistoryAdapter.java`
-  (modifica, gesto tieni-premuto), `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java`
-  (modifica, dialogo di conferma + cancellazione file),
+  `android/app/src/main/java/com/manu/myapp/HistoryDbHelper.java` (modifica,  metodo `delete`), 
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryAdapter.java`   (modifica, gesto tieni-premuto), 
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java` (modifica, dialogo di conferma + cancellazione file),
   `android/app/src/main/res/values/strings.xml` (modifica)
-- ⬜ **Profilo utente locale** (nome utente salvato sul telefono, non
-  autenticazione vera)
-  → `android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java`
+- ✅ **Profilo utente locale** — nome utente salvato tramite
+  `SharedPreferences` (nessuna autenticazione vera), gestito da una
+  utility condivisa (`ProfileManager`) invece che direttamente nel
+  Fragment. Collegato al Test Manuale: le classificazioni fatte con un
+  profilo impostato mostrano il nome nel badge fonte della Cronologia
+  (es. "Foto locale — Manu"), invece del generico "Foto locale".
+  `android/app/src/main/java/com/manu/myapp/ProfileManager.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java` (nuovo contenuto), 
+  `android/app/src/main/res/layout/fragment_profile.xml` (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`(modifica), 
+  `android/app/src/main/res/values/strings.xml` (modifica)
 - ⬜ **Impostazioni** (porta server, lingua IT/EN, tema chiaro/scuro)
   → `android/` (nuova schermata/Activity dedicata)
 - ⬜ **Localizzazione IT/EN** (da fare per ultima, quando i testi sono stabili)

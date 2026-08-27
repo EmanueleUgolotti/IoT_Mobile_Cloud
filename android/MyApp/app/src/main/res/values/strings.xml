@@ -42,5 +42,10 @@
 
     <!-- Profilo -->
     <string name="profile_placeholder">Profilo utente</string>
+    <string name="profile_section_name">Nome utente</string>
+    <string name="profile_name_hint">Inserisci il tuo nome</string>
+    <string name="profile_save">Salva</string>
+    <string name="profile_saved_confirmation">Profilo salvato</string>
+    <string name="profile_note">Il nome viene usato solo per identificare le classificazioni fatte con "Test manuale" su questo dispositivo. Non è un account: nessuna password, nessun collegamento a un server.</string>
 
 </resources>

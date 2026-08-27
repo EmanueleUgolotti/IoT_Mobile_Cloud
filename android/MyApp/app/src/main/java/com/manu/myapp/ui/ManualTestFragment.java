@@ -30,6 +30,7 @@ import com.manu.myapp.Classifier;
 import com.manu.myapp.HistoryDbHelper;
 import com.manu.myapp.ImageStorage;
 import com.manu.myapp.ImageUtils;
+import com.manu.myapp.ProfileManager;
 import com.manu.myapp.R;
 import com.manu.myapp.ResultDetailActivity;
 
@@ -173,9 +174,14 @@ public class ManualTestFragment extends Fragment {
             String imagePath = ImageStorage.save(requireContext(), bitmap, fileName);
             long timestamp = System.currentTimeMillis();
 
+            String profileName = ProfileManager.getName(requireContext());
+            String source = profileName.isEmpty()
+                    ? "Foto locale"
+                    : "Foto locale — " + profileName;
+
             HistoryDbHelper db = new HistoryDbHelper(requireContext());
             db.insert(fileName, result.predictedLabel, result.confidence,
-                    result.probabilities, "Foto locale", timestamp, imagePath);
+                    result.probabilities, source, timestamp, imagePath);
 
             lastResult = result;
             lastProbabilities = result.probabilities;

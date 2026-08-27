@@ -40,23 +40,65 @@ creeremo.
   `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica),
   `android/app/build.gradle` (dipendenza NanoHTTPD),
   `android/app/src/main/AndroidManifest.xml` (permesso INTERNET)
-
-  il telefono ora ha un piccolo server integrato (IngestServer.java) che ascolta sulla porta 8080 esattamente come fa il backend cloud — riceve la stessa struttura di richiesta, la valida, e (per ora) la stampa nel log. Non guarda ancora dentro l'immagine.
-
-
-- ✅ Preprocessing dell'immagine + Inferenza locale con TensorFlow Lite — modello VGG16 convertito in .tflite, integrato nell'app: decodifica immagine ricevuta (modalità captured), preprocessing identico al training (conversione RGB→BGR + sottrazione media ImageNet, NON /255), esecuzione modello, log del risultato. Verificato end-to-end su dispositivo reale (server → decodifica → preprocessing → inferenza), risultato coerente con i test Python. Richiesto downgrade di Gradle/AGP (8.9 / 8.7) per conflitti di manifest, e libreria TensorFlow Lite alla versione 2.17.0 (le precedenti non riconoscevano l'opcode FULLY_CONNECTED v12 usato dal modello). android/app/src/main/java/com/manu/myapp/Classifier.java, android/app/src/main/java/com/manu/myapp/MainActivity.java (modifica), android/app/src/main/assets/bpa_vgg16.tflite, android/app/build.gradle.kts (dipendenza TensorFlow Lite 2.17.0, android.useAndroidX/enableJetifier in gradle.properties), models/bpa_vgg16.tflite (sorgente del modello), experiments/convert_to_tflite.py, experiments/test_tflite_inference.py, experiments/test_keras_inference.py, experiments/requirements.txt, experiments/make_captured_test_request.py (script di test end-to-end)
-
-- ✅ Struttura di navigazione app — Bottom Navigation con 4 schermate (Home, Cronologia, Test manuale, Profilo), sostituendo i Fragment demo del template. Solo scheletro navigabile, contenuto placeholder — la logica funzionante di ciascuna schermata è nei task seguenti. android/app/src/main/res/navigation/nav_graph.xml, android/app/src/main/res/menu/bottom_nav_menu.xml, android/app/src/main/res/layout/activity_main.xml, android/app/src/main/res/layout/fragment_{home,history,manual_test,profile}.xml, android/app/src/main/java/com/manu/myapp/ui/{Home,History,ManualTest,Profile}Fragment.java, android/app/src/main/res/values/strings.xml
-
-- ⬜ Home: stato server in tempo reale + ultimo risultato (sostituire il placeholder statico con dati reali, aggiornati quando arriva un'acquisizione) → android/app/src/main/java/com/manu/myapp/ui/HomeFragment.java
-- ⬜ Cronologia: lista classificazioni passate (con anteprima immagine, indicatore di confidenza, badge fonte Mobile/Cloud/Foto locale) → android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java
-- ⬜ Test manuale: scatta/scegli foto e classifica subito → android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java
-- ⬜ Profilo utente locale (nome utente salvato sul telefono, non autenticazione vera) → android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java
-- ⬜ Impostazioni (porta server, lingua IT/EN, tema chiaro/scuro) → android/ (nuova schermata/Activity dedicata)
-- ⬜ Localizzazione IT/EN (da fare per ultima, quando i testi sono stabili) → android/app/src/main/res/values/strings.xml, android/app/src/main/res/values-en/strings.xml
-
-- ⬜ **Visualizzazione del risultato** (che tipo di macchia ha riconosciuto)
-  → `android/`
+- ✅ **Preprocessing dell'immagine + Inferenza locale con TensorFlow Lite** —
+  modello VGG16 convertito in `.tflite`, integrato nell'app: decodifica
+  immagine ricevuta (modalità `captured`), preprocessing identico al
+  training (conversione RGB→BGR + sottrazione media ImageNet, NON /255),
+  esecuzione modello, log del risultato. Verificato end-to-end su
+  dispositivo reale (server → decodifica → preprocessing → inferenza),
+  risultato coerente con i test Python. Richiesto downgrade di
+  Gradle/AGP (8.9 / 8.7) per conflitti di manifest, e libreria
+  TensorFlow Lite alla versione 2.17.0 (le precedenti non riconoscevano
+  l'opcode FULLY_CONNECTED v12 usato dal modello).
+  `android/app/src/main/java/com/manu/myapp/Classifier.java`,
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica),
+  `android/app/src/main/assets/bpa_vgg16.tflite`,
+  `android/app/build.gradle.kts` (dipendenza TensorFlow Lite 2.17.0,
+  android.useAndroidX/enableJetifier in gradle.properties),
+  `models/bpa_vgg16.tflite` (sorgente del modello),
+  `experiments/convert_to_tflite.py`, `experiments/test_tflite_inference.py`,
+  `experiments/test_keras_inference.py`, `experiments/requirements.txt`,
+  `experiments/make_captured_test_request.py` (script di test end-to-end)
+- ✅ **Struttura di navigazione app** — Bottom Navigation con 4 schermate
+  (Home, Cronologia, Test manuale, Profilo), sostituendo i Fragment demo
+  del template. Solo scheletro navigabile, contenuto placeholder — la
+  logica funzionante di ciascuna schermata è nei task seguenti.
+  `android/app/src/main/res/navigation/nav_graph.xml`,
+  `android/app/src/main/res/menu/bottom_nav_menu.xml`,
+  `android/app/src/main/res/layout/activity_main.xml`,
+  `android/app/src/main/res/layout/fragment_{home,history,manual_test,profile}.xml`,
+  `android/app/src/main/java/com/manu/myapp/ui/{Home,History,ManualTest,Profile}Fragment.java`,
+  `android/app/src/main/res/values/strings.xml`
+- ✅ **Home: stato server in tempo reale + ultimo risultato** — la Home
+  osserva uno stato condiviso (`AppState`, basato su LiveData) aggiornato
+  da `MainActivity` ogni volta che il server cambia stato o arriva una
+  classificazione: mostra porta/stato server, classe predetta, confidenza
+  con barra, fonte e orario. Toccando il riquadro si apre una schermata
+  di dettaglio con l'immagine analizzata a schermo intero e un grafico a
+  barre con la probabilità di ciascuna delle 6 classi. Testato end-to-end
+  su dispositivo reale.
+  `android/app/src/main/java/com/manu/myapp/AppState.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/ResultDetailActivity.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica),
+  `android/app/src/main/java/com/manu/myapp/ui/HomeFragment.java` (modifica),
+  `android/app/src/main/res/layout/fragment_home.xml` (modifica),
+  `android/app/src/main/res/layout/activity_result_detail.xml` (nuovo),
+  `android/app/src/main/res/layout/item_probability_bar.xml` (nuovo),
+  `android/app/src/main/AndroidManifest.xml` (registrazione ResultDetailActivity),
+  `android/app/src/main/res/values/strings.xml` (modifica)
+- ⬜ **Cronologia: lista classificazioni passate** (con anteprima immagine,
+  indicatore di confidenza, badge fonte Mobile/Cloud/Foto locale)
+  → `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java`
+- ⬜ **Test manuale: scatta/scegli foto e classifica subito**
+  → `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`
+- ⬜ **Profilo utente locale** (nome utente salvato sul telefono, non
+  autenticazione vera)
+  → `android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java`
+- ⬜ **Impostazioni** (porta server, lingua IT/EN, tema chiaro/scuro)
+  → `android/` (nuova schermata/Activity dedicata)
+- ⬜ **Localizzazione IT/EN** (da fare per ultima, quando i testi sono stabili)
+  → `android/app/src/main/res/values/strings.xml`,
+  `android/app/src/main/res/values-en/strings.xml`
 
 ## ESP32 #2 — Gateway
 
@@ -81,6 +123,14 @@ creeremo.
 
 ## Robustezza / gestione errori (trasversale a più pezzi)
 
+- ✅ **Discrepanza di precisione numerica Python vs Android** — stessa
+  classe predetta, confidenza leggermente diversa tra i due ambienti
+  (decodifica JPEG e algoritmo di ridimensionamento diversi). Applicato
+  resize bicubico anche lato Android per ridurre la discrepanza; causa
+  residua (decoder JPEG nativo) documentata come limite noto, non
+  bloccante per il funzionamento del sistema.
+  `android/app/src/main/java/com/manu/myapp/Classifier.java` (resize bicubico)
+  (dettagli: `docs/architecture/inference-precision-notes.md`)
 - ✅ **Riferimento immagine inesistente** — gestito lato backend (risponde
   con errore chiaro, non si pianta)
   `backend/api/main.py` (funzione `_handle_reference`)

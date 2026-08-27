@@ -106,8 +106,41 @@ creeremo.
   `android/app/src/main/res/layout/item_history_row.xml` (nuovo),
   `android/app/src/main/res/layout/fragment_history.xml` (modifica),
   `android/app/src/main/res/values/strings.xml` (modifica)
-- ⬜ **Test manuale: scatta/scegli foto e classifica subito**
-  → `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`
+- ✅ **Test manuale: scatta/scegli foto e classifica subito** — due modi
+  per ottenere un'immagine: Photo Picker di sistema (galleria, nessun
+  permesso richiesto) o app fotocamera (via intent, nessuna gestione
+  permessi lato nostro). Nome file reale (assegnato dal sistema) per le
+  foto da galleria; nome generato in formato Android per le foto appena
+  scattate. Classificazione con lo stesso `Classifier` condiviso (via
+  `AppState`), salvataggio in Cronologia con fonte "Foto locale"
+  (distinta da "Mobile" per le acquisizioni dal gateway).
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`
+  (nuovo contenuto), `android/app/src/main/res/layout/fragment_manual_test.xml`
+  (modifica), `android/app/src/main/java/com/manu/myapp/ImageStorage.java`
+  (nuovo, utility condivisa di salvataggio immagini, estratta da MainActivity),
+  `android/app/src/main/java/com/manu/myapp/AppState.java` (modifica,
+  riferimento condiviso al classificatore),
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica)
+- ✅ **Correzione OutOfMemoryError con immagini ad alta risoluzione** —
+  immagini sorgente molto grandi (es. foto originali del dataset)
+  causavano crash sia in fase di classificazione (ridimensionamento
+  bicubico che duplicava l'immagine intera in un array) sia in fase di
+  visualizzazione del dettaglio. Risolto limitando le dimensioni massime
+  (1024px sul lato più lungo) subito dopo la decodifica di qualunque
+  immagine in ingresso, prima di ogni elaborazione successiva.
+  `android/app/src/main/java/com/manu/myapp/ImageUtils.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/Classifier.java` (modifica,
+  pre-ridimensionamento efficiente prima del bicubico),
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica),
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java` (modifica)
+- ✅ **Eliminazione voci dalla Cronologia** — tenendo premuto su una riga,
+  con conferma, si elimina sia il record dal database sia il file
+  immagine associato.
+  `android/app/src/main/java/com/manu/myapp/HistoryDbHelper.java` (modifica,
+  metodo `delete`), `android/app/src/main/java/com/manu/myapp/ui/HistoryAdapter.java`
+  (modifica, gesto tieni-premuto), `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java`
+  (modifica, dialogo di conferma + cancellazione file),
+  `android/app/src/main/res/values/strings.xml` (modifica)
 - ⬜ **Profilo utente locale** (nome utente salvato sul telefono, non
   autenticazione vera)
   → `android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java`

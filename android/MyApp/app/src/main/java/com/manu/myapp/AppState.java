@@ -37,6 +37,13 @@ public class AppState {
     public final MutableLiveData<LastResult> lastResult = new MutableLiveData<>();
 
     /**
+     * Riferimento condiviso al classificatore, caricato una sola volta da
+     * MainActivity. Permette ad altre schermate (es. ManualTestFragment)
+     * di classificare immagini senza dover ricaricare il modello.
+     */
+    public Classifier classifier;
+
+    /**
      * Rappresenta un risultato di classificazione mostrabile in UI:
      * immagine, nome/identificativo del file, classe predetta, tutte
      * le probabilita' per classe, fonte, momento di ricezione.

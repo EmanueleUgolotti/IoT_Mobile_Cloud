@@ -1,12 +1,12 @@
 package com.manu.myapp.ui;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +18,7 @@ import com.manu.myapp.HistoryDbHelper;
 import com.manu.myapp.HistoryItem;
 import com.manu.myapp.R;
 
+import java.io.File;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,12 +26,12 @@ import java.util.concurrent.Executors;
 /**
  * Schermata Cronologia: lista delle classificazioni passate, lette dal
  * database SQLite locale. Il caricamento avviene su un thread separato
- * per non bloccare l'interfaccia.
+ * per non bloccare l'interfaccia. Tenendo premuto su una voce si puo'
+ * eliminarla (record + file immagine), con conferma.
  */
 public class HistoryFragment extends Fragment {
 
     private RecyclerView recyclerHistory;
-    private TextView textEmpty;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Nullable
@@ -72,8 +73,38 @@ public class HistoryFragment extends Fragment {
                 if (getView() == null) {
                     return; // fragment non piu' visibile
                 }
-                recyclerHistory.setAdapter(new HistoryAdapter(items));
+                recyclerHistory.setAdapter(new HistoryAdapter(items, this::confirmDelete));
             });
+        });
+    }
+
+    private void confirmDelete(HistoryItem item) {
+        if (getContext() == null) {
+            return;
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.history_delete_title)
+                .setMessage(getString(R.string.history_delete_message, item.fileName))
+                .setPositiveButton(R.string.history_delete_confirm, (dialog, which) -> deleteItem(item))
+                .setNegativeButton(R.string.history_delete_cancel, null)
+                .show();
+    }
+
+    private void deleteItem(HistoryItem item) {
+        executor.execute(() -> {
+            HistoryDbHelper db = new HistoryDbHelper(requireContext());
+            db.delete(item.id);
+
+            if (item.imagePath != null) {
+                File imageFile = new File(item.imagePath);
+                if (imageFile.exists()) {
+                    imageFile.delete();
+                }
+            }
+
+            Handler mainHandler = new Handler(Looper.getMainLooper());
+            mainHandler.post(this::loadHistory); // ricarica la lista aggiornata
         });
     }
 }

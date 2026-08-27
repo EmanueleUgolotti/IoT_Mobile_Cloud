@@ -72,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
         // --- Caricamento del classificatore ---
         try {
             classifier = new Classifier(getAssets(), MODEL_FILE);
+            AppState.getInstance().classifier = classifier;
             Log.i(TAG, "Modello caricato correttamente: " + MODEL_FILE);
         } catch (IOException e) {
             Log.e(TAG, "Errore caricamento modello", e);
@@ -128,13 +129,19 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            // Limita subito le dimensioni: alcune immagini sorgente (es. foto
+            // originali ad alta risoluzione) possono altrimenti causare
+            // OutOfMemoryError in fasi successive (classificazione, salvataggio,
+            // visualizzazione)
+            bitmap = ImageUtils.capMaxDimension(bitmap);
+
             Classifier.Result result = classifier.classify(bitmap);
             Log.i(TAG, "Classificazione: " + result.predictedLabel +
                     " (confidenza " + result.confidence + ")");
 
             String fileName = payload.optString("capture_id", "sconosciuto");
             long timestamp = System.currentTimeMillis();
-            String imagePath = saveImageToInternalStorage(bitmap, fileName);
+            String imagePath = ImageStorage.save(this, bitmap, fileName);
 
             // Salvataggio persistente in cronologia (fuori dal thread UI,
             // siamo gia' nel thread del server NanoHTTPD)
@@ -155,25 +162,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e(TAG, "Errore durante la classificazione", e);
         }
-    }
-
-    private String saveImageToInternalStorage(Bitmap bitmap, String baseName) {
-        File dir = new File(getFilesDir(), "history_images");
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-
-        String safeFileName = baseName + "_" + UUID.randomUUID().toString().substring(0, 8) + ".jpg";
-        File imageFile = new File(dir, safeFileName);
-
-        try (FileOutputStream out = new FileOutputStream(imageFile)) {
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out);
-        } catch (IOException e) {
-            Log.e(TAG, "Errore salvataggio immagine su storage interno", e);
-            return null;
-        }
-
-        return imageFile.getAbsolutePath();
     }
 
     @Override

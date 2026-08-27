@@ -58,6 +58,16 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Elimina una classificazione dalla cronologia, dato il suo id.
+     * Non elimina il file immagine associato - va fatto separatamente
+     * dal chiamante (il percorso e' disponibile in HistoryItem.imagePath).
+     */
+    public void delete(long id) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete(TABLE, COL_ID + " = ?", new String[]{String.valueOf(id)});
+    }
+
+    /**
      * Inserisce una nuova classificazione nella cronologia.
      * Va chiamato fuori dal thread principale (es. dal thread del server
      * NanoHTTPD, che non e' il thread UI).

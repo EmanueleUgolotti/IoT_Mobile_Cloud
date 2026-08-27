@@ -27,11 +27,18 @@
     <!-- Cronologia -->
     <string name="history_placeholder">Cronologia delle classificazioni</string>
     <string name="history_thumbnail_description">Anteprima immagine</string>
+    <string name="history_delete_title">Eliminare questa voce?</string>
+    <string name="history_delete_message">Verrà eliminata la classificazione di \"%1$s\" e l\'immagine associata. L\'operazione non è reversibile.</string>
+    <string name="history_delete_confirm">Elimina</string>
+    <string name="history_delete_cancel">Annulla</string>
 
     <!-- Test manuale -->
-    <string name="manual_test_pick_image">Scegli immagine</string>
+    <string name="manual_test_pick_image">Scegli dalla galleria</string>
+    <string name="manual_test_take_photo">Scatta foto</string>
     <string name="manual_test_result_placeholder">Nessuna immagine selezionata</string>
     <string name="manual_test_image_preview_description">Anteprima immagine selezionata</string>
+    <string name="manual_test_classifying">Classificazione in corso…</string>
+    <string name="manual_test_error">Errore durante la classificazione</string>
 
     <!-- Profilo -->
     <string name="profile_placeholder">Profilo utente</string>

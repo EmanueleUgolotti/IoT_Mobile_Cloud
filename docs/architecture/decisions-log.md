@@ -210,3 +210,58 @@ Activity quasi identiche, `ResultDetailActivity` controlla se l'Intent
 contiene dati (`EXTRA_LABEL` presente) — se sì li usa (caso Cronologia),
 altrimenti ricade su `AppState.lastResult` (caso Home). Un solo file,
 riusato per entrambi i percorsi.
+
+## 16. OutOfMemoryError con immagini ad alta risoluzione — due cause distinte, una soluzione comune
+ 
+**Primo sintomo**: l'app crashava con `OutOfMemoryError` durante la
+classificazione di un'immagine arrivata via `/mobile/ingest` (test
+curl), ma non con foto normali scattate dal telefono.
+ 
+**Causa**: il resize bicubico manuale (vedi punto 8) copia l'intera
+immagine sorgente in un array Java (`getPixels`) prima di ridimensionarla.
+Per un'immagine sorgente molto grande (foto originale del dataset,
+diversi milioni di pixel), quell'array può pesare centinaia di MB — oltre
+il limite di memoria che Android assegna a un'app (tipicamente ~192MB).
+Il resize nativo di Android (`Bitmap.createScaledBitmap`, usato prima
+dell'allineamento con PIL) non aveva questo problema perché non duplica
+mai l'immagine intera in un array separato.
+ 
+**Secondo sintomo**: dopo aver corretto il primo problema, toccare
+quella stessa immagine nella Cronologia per vederne il dettaglio
+causava un nuovo crash — la classificazione ora funzionava, ma la
+*visualizzazione* a piena risoluzione no.
+ 
+**Causa**: l'immagine veniva tenuta/salvata/ricaricata sempre alla sua
+risoluzione originale in più punti (in memoria per la Home, su file per
+la Cronologia, ricaricata da file per il Dettaglio) — nessuno di questi
+punti era di per sé il problema quanto la somma: immagini enormi
+sopravvivono e vengono ri-decodificate più volte nell'app.
+ 
+**Soluzione (alla radice, non punto per punto)**: invece di correggere
+ogni singolo punto che tocca l'immagine, si limitano le dimensioni
+**una sola volta**, subito dopo la decodifica iniziale (in
+`MainActivity.classifyCaptured` e in `ManualTestFragment`), tramite
+`ImageUtils.capMaxDimension` (massimo 1024px sul lato più lungo). Da
+quel momento in poi, ogni componente a valle (classificazione,
+salvataggio, miniature, dettaglio) lavora già su una versione sicura
+dell'immagine — nessun altro punto del codice deve preoccuparsene.
+ 
+**Lezione**: quando un problema di memoria si ripresenta in più punti
+diversi collegati agli stessi dati, conviene risolverlo alla sorgente
+(appena i dati entrano nel sistema) invece di rincorrerlo in ogni punto
+dove i dati vengono riusati.
+ 
+## 17. Eliminazione dalla Cronologia — perché tieni-premuto e non uno swipe o un'icona cestino
+ 
+Un semplice tocco è già usato per aprire il dettaglio — serviva un
+gesto diverso per l'eliminazione, per evitare cancellazioni accidentali.
+Il tieni-premuto (`long click`) è il pattern standard Android per azioni
+"secondarie" su un elemento di lista (è lo stesso gesto usato, ad
+esempio, per selezionare messaggi in un'app di chat). Rispetto a uno
+swipe-to-delete o un'icona cestino sempre visibile, è più semplice da
+implementare (nessun layout aggiuntivo per riga, nessuna libreria di
+gesture) e comunque immediatamente riconoscibile per un utente Android.
+La conferma con dialogo (invece di cancellare subito al tocco lungo) è
+una misura di sicurezza minima contro tocchi accidentali, dato che
+l'operazione non è reversibile (elimina anche il file immagine, non solo
+il record).

@@ -114,6 +114,27 @@ public class Classifier {
      * risultati tra app mobile e script Python.
      */
     private int[] bicubicResize(Bitmap src, int dstWidth, int dstHeight) {
+        // Pre-ridimensionamento con l'algoritmo nativo (veloce, non
+        // duplica l'intera immagine in un array Java) se la sorgente e'
+        // molto piu' grande del necessario - evita OutOfMemoryError con
+        // foto ad alta risoluzione, dato che il bicubico sotto lavora
+        // copiando i pixel in un array int[] (costoso in memoria se
+        // fatto sull'immagine a piena risoluzione).
+        int maxIntermediateDim = Math.max(dstWidth, dstHeight) * 2;
+        if (src.getWidth() > maxIntermediateDim || src.getHeight() > maxIntermediateDim) {
+            double scale = (double) maxIntermediateDim /
+                    Math.max(src.getWidth(), src.getHeight());
+            int intermediateWidth = Math.max(1, (int) (src.getWidth() * scale));
+            int intermediateHeight = Math.max(1, (int) (src.getHeight() * scale));
+            Bitmap prescaled = Bitmap.createScaledBitmap(src, intermediateWidth, intermediateHeight, true);
+            int[] result = bicubicResizeInternal(prescaled, dstWidth, dstHeight);
+            prescaled.recycle();
+            return result;
+        }
+        return bicubicResizeInternal(src, dstWidth, dstHeight);
+    }
+
+    private int[] bicubicResizeInternal(Bitmap src, int dstWidth, int dstHeight) {
         int srcWidth = src.getWidth();
         int srcHeight = src.getHeight();
 

@@ -24,14 +24,23 @@ import java.util.Locale;
 /**
  * Adapter per la lista della cronologia. Ogni riga mostra una miniatura
  * dell'immagine, nome file, classe predetta, badge fonte, orario e
- * confidenza. Il tocco su una riga apre il dettaglio completo.
+ * confidenza. Il tocco su una riga apre il dettaglio completo; tenendo
+ * premuto si richiede l'eliminazione (con conferma gestita dal Fragment
+ * tramite OnDeleteRequestListener).
  */
 public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHolder> {
 
-    private final List<HistoryItem> items;
+    /** Callback invocato quando l'utente chiede di eliminare una voce. */
+    public interface OnDeleteRequestListener {
+        void onDeleteRequested(HistoryItem item);
+    }
 
-    public HistoryAdapter(List<HistoryItem> items) {
+    private final List<HistoryItem> items;
+    private final OnDeleteRequestListener deleteListener;
+
+    public HistoryAdapter(List<HistoryItem> items, OnDeleteRequestListener deleteListener) {
         this.items = items;
+        this.deleteListener = deleteListener;
     }
 
     @NonNull
@@ -64,6 +73,8 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
             options.inSampleSize = 4;
             Bitmap thumbnail = BitmapFactory.decodeFile(item.imagePath, options);
             holder.imageThumbnail.setImageBitmap(thumbnail);
+        } else {
+            holder.imageThumbnail.setImageBitmap(null);
         }
 
         holder.itemView.setOnClickListener(v -> {
@@ -74,6 +85,13 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
             intent.putExtra(ResultDetailActivity.EXTRA_PROBABILITIES, item.probabilities);
             intent.putExtra(ResultDetailActivity.EXTRA_IMAGE_PATH, item.imagePath);
             v.getContext().startActivity(intent);
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (deleteListener != null) {
+                deleteListener.onDeleteRequested(item);
+            }
+            return true;
         });
     }
 

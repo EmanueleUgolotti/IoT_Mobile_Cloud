@@ -148,10 +148,11 @@ public class MainActivity extends AppCompatActivity {
 
             // Salvataggio persistente in cronologia (fuori dal thread UI,
             // siamo gia' nel thread del server NanoHTTPD)
-            historyDb.insert(fileName, result.predictedLabel, result.confidence,
+            long id = historyDb.insert(fileName, result.predictedLabel, result.confidence,
                     result.probabilities, "Mobile", timestamp, imagePath);
 
             AppState.LastResult lastResult = new AppState.LastResult(
+                    id,
                     bitmap,
                     fileName,
                     result.predictedLabel,

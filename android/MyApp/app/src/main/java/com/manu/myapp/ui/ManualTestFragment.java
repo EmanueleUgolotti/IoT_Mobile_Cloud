@@ -71,6 +71,7 @@ public class ManualTestFragment extends Fragment {
     private float[] lastProbabilities;
     private String lastImagePath;
     private String lastFileName;
+    private long lastId;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -180,13 +181,14 @@ public class ManualTestFragment extends Fragment {
                     : "Foto locale — " + profileName;
 
             HistoryDbHelper db = new HistoryDbHelper(requireContext());
-            db.insert(fileName, result.predictedLabel, result.confidence,
+            long id = db.insert(fileName, result.predictedLabel, result.confidence,
                     result.probabilities, source, timestamp, imagePath);
 
             lastResult = result;
             lastProbabilities = result.probabilities;
             lastImagePath = imagePath;
             lastFileName = fileName;
+            lastId = id;
 
             Handler mainHandler = new Handler(Looper.getMainLooper());
             mainHandler.post(() -> showResult(fileName, result, timestamp));
@@ -214,11 +216,13 @@ public class ManualTestFragment extends Fragment {
 
         resultCard.setOnClickListener(v -> {
             Intent intent = new Intent(getActivity(), ResultDetailActivity.class);
+            intent.putExtra(ResultDetailActivity.EXTRA_ID, lastId);
             intent.putExtra(ResultDetailActivity.EXTRA_FILE_NAME, lastFileName);
             intent.putExtra(ResultDetailActivity.EXTRA_LABEL, lastResult.predictedLabel);
             intent.putExtra(ResultDetailActivity.EXTRA_CONFIDENCE, lastResult.confidence);
             intent.putExtra(ResultDetailActivity.EXTRA_PROBABILITIES, lastProbabilities);
             intent.putExtra(ResultDetailActivity.EXTRA_IMAGE_PATH, lastImagePath);
+            intent.putExtra(ResultDetailActivity.EXTRA_NOTE, "");
             startActivity(intent);
         });
     }

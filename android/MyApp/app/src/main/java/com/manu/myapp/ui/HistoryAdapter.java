@@ -79,11 +79,13 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
 
         holder.itemView.setOnClickListener(v -> {
             Intent intent = new Intent(v.getContext(), ResultDetailActivity.class);
+            intent.putExtra(ResultDetailActivity.EXTRA_ID, item.id);
             intent.putExtra(ResultDetailActivity.EXTRA_FILE_NAME, item.fileName);
             intent.putExtra(ResultDetailActivity.EXTRA_LABEL, item.label);
             intent.putExtra(ResultDetailActivity.EXTRA_CONFIDENCE, item.confidence);
             intent.putExtra(ResultDetailActivity.EXTRA_PROBABILITIES, item.probabilities);
             intent.putExtra(ResultDetailActivity.EXTRA_IMAGE_PATH, item.imagePath);
+            intent.putExtra(ResultDetailActivity.EXTRA_NOTE, item.note);
             v.getContext().startActivity(intent);
         });
 

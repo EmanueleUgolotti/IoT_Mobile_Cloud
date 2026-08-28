@@ -23,9 +23,14 @@
     <string name="detail_title">Dettaglio risultato</string>
     <string name="detail_image_description">Immagine analizzata</string>
     <string name="detail_section_probabilities">Probabilità per classe</string>
+    <string name="detail_section_note">Nota</string>
+    <string name="detail_note_hint">Aggiungi una nota (facoltativa)</string>
+    <string name="detail_note_save">Salva nota</string>
+    <string name="detail_note_saved_confirmation">Nota salvata</string>
 
     <!-- Cronologia -->
     <string name="history_placeholder">Cronologia delle classificazioni</string>
+    <string name="history_search_hint">Cerca per nome file o nota…</string>
     <string name="history_thumbnail_description">Anteprima immagine</string>
     <string name="history_delete_title">Eliminare questa voce?</string>
     <string name="history_delete_message">Verrà eliminata la classificazione di \"%1$s\" e l\'immagine associata. L\'operazione non è reversibile.</string>

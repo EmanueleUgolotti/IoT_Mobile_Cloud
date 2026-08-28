@@ -23,9 +23,14 @@
     <string name="detail_title">Result detail</string>
     <string name="detail_image_description">Analyzed image</string>
     <string name="detail_section_probabilities">Probability per class</string>
+    <string name="detail_section_note">Note</string>
+    <string name="detail_note_hint">Add a note (optional)</string>
+    <string name="detail_note_save">Save note</string>
+    <string name="detail_note_saved_confirmation">Note saved</string>
 
     <!-- History -->
     <string name="history_placeholder">Classification history</string>
+    <string name="history_search_hint">Search by file name or note…</string>
     <string name="history_thumbnail_description">Image preview</string>
     <string name="history_delete_title">Delete this entry?</string>
     <string name="history_delete_message">The classification of \"%1$s\" and its associated image will be deleted. This action cannot be undone.</string>

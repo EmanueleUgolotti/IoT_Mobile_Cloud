@@ -149,11 +149,52 @@ creeremo.
   `android/app/src/main/res/layout/fragment_profile.xml` (modifica), 
   `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`(modifica), 
   `android/app/src/main/res/values/strings.xml` (modifica)
-- ⬜ **Impostazioni** (porta server, lingua IT/EN, tema chiaro/scuro)
-  → `android/` (nuova schermata/Activity dedicata)
-- ⬜ **Localizzazione IT/EN** (da fare per ultima, quando i testi sono stabili)
-  → `android/app/src/main/res/values/strings.xml`,
-  `android/app/src/main/res/values-en/strings.xml`
+- ✅ **Impostazioni** — schermata dedicata (`SettingsActivity`, raggiungibile
+  dal menu della Toolbar) con tre controlli: porta del server (salvata,
+  effettiva al prossimo riavvio dell'app — il server non si riavvia "a
+  caldo"), tema chiaro/scuro/sistema (applicato subito, tramite
+  `AppCompatDelegate`), lingua italiano/inglese (meccanismo di cambio
+  attivato subito, tramite `AppCompatDelegate.setApplicationLocales`,
+  ma le traduzioni inglesi vere arrivano nel task successivo). Tema e
+  lingua applicati il prima possibile all'avvio tramite una classe
+  `Application` dedicata (`BpaApplication`), non solo dentro una singola
+  Activity, così ogni schermata li riceve fin dal primo frame.
+  `android/app/src/main/java/com/manu/myapp/SettingsManager.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/BpaApplication.java` (nuovo),
+  `android/app/src/main/java/com/manu/myapp/SettingsActivity.java` (nuovo),
+  `android/app/src/main/res/layout/activity_settings.xml` (nuovo),
+  `android/app/src/main/res/menu/menu_main.xml` (nuovo/verificato),
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica,
+  porta letta da SettingsManager, menu Impostazioni collegato),
+  `android/app/src/main/AndroidManifest.xml` (modifica, registrazione  BpaApplication e SettingsActivity), `android/app/src/main/res/values/strings.xml`  (modifica)
+- ✅ **Localizzazione IT/EN** — file `values-en/strings.xml` completo,
+  48 stringhe tradotte (verificate: stesse chiavi presenti in entrambi i
+  file, nessuna mancante). Il meccanismo di cambio lingua (da task
+  Impostazioni) ora mostra davvero i testi inglesi quando selezionato.
+  `android/app/src/main/res/values-en/strings.xml` (nuovo)
+- ✅ **Profilo collegato alla Cronologia** — le classificazioni fatte dal
+  Test Manuale mostrano il nome profilo nel badge fonte (es. "Foto
+  locale — Manu"), invece del generico "Foto locale".
+  `android/app/src/main/java/com/manu/myapp/ProfileManager.java` (nuovo,  utility condivisa), 
+  `android/app/src/main/java/com/manu/myapp/ui/ProfileFragment.java`  (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`(modifica)
+- ✅ **Note libere sui risultati + ricerca nella Cronologia** — ogni
+  classificazione salvata può ricevere una nota di testo libero
+  (modificabile dalla schermata Dettaglio); la Cronologia ha una casella
+  di ricerca che filtra in tempo reale per nome file o per contenuto
+  della nota. Database aggiornato da v1 a v2 con `ALTER TABLE` (non
+  ricreato), per non perdere le classificazioni già salvate.
+  `android/app/src/main/java/com/manu/myapp/HistoryDbHelper.java`  (modifica: colonna nota, `updateNote`, `search`, `insert` ora restituisce l'id), 
+  `android/app/src/main/java/com/manu/myapp/HistoryItem.java` (modifica: campo nota), 
+  `android/app/src/main/java/com/manu/myapp/AppState.java` (modifica: id nel LastResult), 
+  `android/app/src/main/java/com/manu/myapp/MainActivity.java` (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ResultDetailActivity.java` (modifica: sezione nota, chiusura tastiera al salvataggio),
+  `android/app/src/main/java/com/manu/myapp/ui/ManualTestFragment.java`  (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryAdapter.java`  (modifica), 
+  `android/app/src/main/java/com/manu/myapp/ui/HistoryFragment.java` (modifica: casella di ricerca, chiusura tastiera),
+  `android/app/src/main/res/layout/activity_result_detail.xml` (modifica),
+  `android/app/src/main/res/layout/fragment_history.xml` (modifica),
+  `android/app/src/main/res/values/strings.xml` e `values-en/strings.xml`(modifica, mantenuti allineati: 53 chiavi in entrambi)
 
 - ⬜ **Personalizzazione grafica** (colori, font, tema visivo — rimandata
   deliberatamente a quando le funzionalità sono stabili, per non dover

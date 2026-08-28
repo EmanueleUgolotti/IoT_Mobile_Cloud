@@ -45,10 +45,12 @@ public class AppState {
 
     /**
      * Rappresenta un risultato di classificazione mostrabile in UI:
-     * immagine, nome/identificativo del file, classe predetta, tutte
-     * le probabilita' per classe, fonte, momento di ricezione.
+     * id nel database (per poterne modificare la nota), immagine,
+     * nome/identificativo del file, classe predetta, tutte le
+     * probabilita' per classe, fonte, momento di ricezione.
      */
     public static class LastResult {
+        public final long id;
         public final Bitmap image;
         public final String fileName;
         public final String label;
@@ -57,8 +59,9 @@ public class AppState {
         public final String source; // "Mobile" (via gateway) o "Foto locale" (test manuale)
         public final long timestampMillis;
 
-        public LastResult(Bitmap image, String fileName, String label, float confidence,
+        public LastResult(long id, Bitmap image, String fileName, String label, float confidence,
                           float[] probabilities, String source, long timestampMillis) {
+            this.id = id;
             this.image = image;
             this.fileName = fileName;
             this.label = label;

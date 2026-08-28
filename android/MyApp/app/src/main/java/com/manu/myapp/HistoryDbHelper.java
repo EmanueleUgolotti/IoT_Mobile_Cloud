@@ -22,7 +22,7 @@ import java.util.List;
 public class HistoryDbHelper extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "history.db";
-    private static final int DB_VERSION = 1;
+    private static final int DB_VERSION = 2; // v2: aggiunta colonna "note"
 
     private static final String TABLE = "history";
     private static final String COL_ID = "id";
@@ -33,6 +33,7 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     private static final String COL_SOURCE = "source";
     private static final String COL_TIMESTAMP = "timestamp_millis";
     private static final String COL_IMAGE_PATH = "image_path";
+    private static final String COL_NOTE = "note";
 
     public HistoryDbHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -48,13 +49,16 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
                 COL_PROBABILITIES + " TEXT, " +
                 COL_SOURCE + " TEXT, " +
                 COL_TIMESTAMP + " INTEGER, " +
-                COL_IMAGE_PATH + " TEXT)");
+                COL_IMAGE_PATH + " TEXT, " +
+                COL_NOTE + " TEXT)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE);
-        onCreate(db);
+        if (oldVersion < 2) {
+            // Aggiunge la colonna nota senza perdere i dati gia' salvati
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN " + COL_NOTE + " TEXT");
+        }
     }
 
     /**
@@ -68,11 +72,24 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Aggiorna la nota libera associata a una classificazione.
+     */
+    public void updateNote(long id, String note) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_NOTE, note);
+        db.update(TABLE, values, COL_ID + " = ?", new String[]{String.valueOf(id)});
+    }
+
+    /**
      * Inserisce una nuova classificazione nella cronologia.
      * Va chiamato fuori dal thread principale (es. dal thread del server
      * NanoHTTPD, che non e' il thread UI).
+     *
+     * @return l'id della riga appena inserita, utile per poter poi
+     *         aggiungere una nota o riferirsi a questa voce specifica.
      */
-    public void insert(String fileName, String label, float confidence,
+    public long insert(String fileName, String label, float confidence,
                        float[] probabilities, String source, long timestampMillis, String imagePath) {
         SQLiteDatabase db = getWritableDatabase();
 
@@ -84,8 +101,9 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
         values.put(COL_SOURCE, source);
         values.put(COL_TIMESTAMP, timestampMillis);
         values.put(COL_IMAGE_PATH, imagePath);
+        values.put(COL_NOTE, "");
 
-        db.insert(TABLE, null, values);
+        return db.insert(TABLE, null, values);
     }
 
     /**
@@ -93,13 +111,39 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
      * Va chiamato fuori dal thread principale.
      */
     public List<HistoryItem> getAll() {
-        List<HistoryItem> items = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-
         Cursor cursor = db.query(TABLE, null, null, null, null, null,
                 COL_TIMESTAMP + " DESC");
+        return cursorToList(cursor);
+    }
+
+    /**
+     * Cerca le classificazioni il cui nome file o nota contengono il
+     * testo cercato (case-insensitive). Se la query e' vuota, equivale
+     * a getAll(). Va chiamato fuori dal thread principale.
+     */
+    public List<HistoryItem> search(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return getAll();
+        }
+
+        SQLiteDatabase db = getReadableDatabase();
+        String likePattern = "%" + query.trim() + "%";
+
+        Cursor cursor = db.query(TABLE, null,
+                COL_FILE_NAME + " LIKE ? OR " + COL_NOTE + " LIKE ?",
+                new String[]{likePattern, likePattern},
+                null, null,
+                COL_TIMESTAMP + " DESC");
+
+        return cursorToList(cursor);
+    }
+
+    private List<HistoryItem> cursorToList(Cursor cursor) {
+        List<HistoryItem> items = new ArrayList<>();
 
         while (cursor.moveToNext()) {
+            String note = cursor.getString(cursor.getColumnIndexOrThrow(COL_NOTE));
             items.add(new HistoryItem(
                     cursor.getLong(cursor.getColumnIndexOrThrow(COL_ID)),
                     cursor.getString(cursor.getColumnIndexOrThrow(COL_FILE_NAME)),
@@ -108,7 +152,8 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
                     csvToFloatArray(cursor.getString(cursor.getColumnIndexOrThrow(COL_PROBABILITIES))),
                     cursor.getString(cursor.getColumnIndexOrThrow(COL_SOURCE)),
                     cursor.getLong(cursor.getColumnIndexOrThrow(COL_TIMESTAMP)),
-                    cursor.getString(cursor.getColumnIndexOrThrow(COL_IMAGE_PATH))
+                    cursor.getString(cursor.getColumnIndexOrThrow(COL_IMAGE_PATH)),
+                    note != null ? note : ""
             ));
         }
         cursor.close();

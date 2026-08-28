@@ -4,9 +4,14 @@ import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,12 +32,15 @@ import java.util.concurrent.Executors;
  * Schermata Cronologia: lista delle classificazioni passate, lette dal
  * database SQLite locale. Il caricamento avviene su un thread separato
  * per non bloccare l'interfaccia. Tenendo premuto su una voce si puo'
- * eliminarla (record + file immagine), con conferma.
+ * eliminarla (record + file immagine), con conferma. La casella di
+ * ricerca filtra per nome file o per contenuto della nota.
  */
 public class HistoryFragment extends Fragment {
 
     private RecyclerView recyclerHistory;
+    private EditText editSearch;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private String currentQuery = "";
 
     @Nullable
     @Override
@@ -48,7 +56,44 @@ public class HistoryFragment extends Fragment {
         recyclerHistory = view.findViewById(R.id.recyclerHistory);
         recyclerHistory.setLayoutManager(new LinearLayoutManager(getContext()));
 
+        editSearch = view.findViewById(R.id.editSearch);
+        editSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                currentQuery = s.toString();
+                loadHistory();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
+        editSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE
+                    || actionId == EditorInfo.IME_ACTION_SEARCH
+                    || actionId == EditorInfo.IME_ACTION_GO) {
+                hideKeyboard(v);
+                return true;
+            }
+            return false;
+        });
+
         loadHistory();
+    }
+
+    private void hideKeyboard(View view) {
+        if (getContext() == null) {
+            return;
+        }
+        InputMethodManager imm = (InputMethodManager)
+                getContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+        view.clearFocus();
     }
 
     @Override
@@ -64,9 +109,11 @@ public class HistoryFragment extends Fragment {
             return;
         }
 
+        String queryAtRequestTime = currentQuery;
+
         executor.execute(() -> {
             HistoryDbHelper db = new HistoryDbHelper(requireContext());
-            List<HistoryItem> items = db.getAll();
+            List<HistoryItem> items = db.search(queryAtRequestTime);
 
             Handler mainHandler = new Handler(Looper.getMainLooper());
             mainHandler.post(() -> {

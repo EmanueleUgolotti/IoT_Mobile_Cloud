@@ -278,3 +278,49 @@ condiviso (`AppState`). Si e' scelto di limitare la modifica della porta
 a "effettiva al prossimo riavvio dell'app", dichiarato esplicitamente
 nell'interfaccia — piu' semplice e sicuro di gestire un riavvio del
 server a runtime
+
+
+## 25. Limite noto: la nota non è visibile aprendo il Dettaglio dalla Home
+ 
+`ResultDetailActivity`, quando aperta dalla Home (percorso "ultimo
+risultato", senza extra nell'Intent), legge i dati da
+`AppState.lastResult` — che non contiene la nota, perché `AppState` è
+uno stato "in memoria" popolato al momento della classificazione, prima
+che qualunque nota possa essere stata scritta. Il campo nota resta
+comunque modificabile e salvabile in quel percorso (l'id è disponibile),
+solo non mostra un valore preesistente. Corretto sarebbe far interrogare
+il database anche al percorso Home, ma non ancora fatto — lasciato come
+nota per un prossimo intervento se necessario.
+
+
+## 20 Perché l'attacco ridimensiona l'immagine a 224×224 prima di partire
+ 
+**Sintomo**: eseguire Boundary su un'immagine ad alta risoluzione
+causava avvisi di allocazione di memoria eccessiva e, sul PC
+dell'utente, un blocco tale da richiedere il riavvio.
+ 
+**Causa**: lo script (nella versione originale del tirocinio, pensata
+per girare su un server con GPU A100 e molta RAM) lasciava che l'attacco
+perturbasse l'immagine alla sua risoluzione originale, anche se il
+modello VGG16 vede comunque solo un'immagine ridimensionata a 224×224
+(la pipeline di predizione la ridimensiona ad ogni chiamata). Un attacco
+come Boundary richiama il modello centinaia di volte per iterazione:
+lavorare su un'immagine di alcuni megapixel invece che su 224×224
+moltiplica inutilmente il costo di memoria e calcolo di ogni chiamata,
+senza alcun beneficio (il risultato finale che il modello "vede" sarebbe
+comunque equivalente).
+ 
+**Soluzione**: ridimensionare l'immagine a 224×224 (stesso algoritmo
+Lanczos già usato dalla pipeline di predizione) *prima* di darla
+all'attacco, nella funzione condivisa `run_art_attack()` — beneficio
+automatico sia da CLI sia dal futuro endpoint, dato che entrambi la
+richiamano.
+ 
+**Lezione**: il codice di ricerca (pensato per un ambiente con risorse
+abbondanti, server con GPU dedicata) spesso fa assunzioni implicite
+sulle risorse disponibili che non reggono quando portato su hardware
+consumer (laptop, senza GPU) — vale la pena controllare esplicitamente
+dove il codice lavora "più in grande" del necessario prima di integrarlo
+in un contesto con vincoli hardware diversi.
+
+

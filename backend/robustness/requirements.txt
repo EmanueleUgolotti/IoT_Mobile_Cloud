@@ -1,0 +1,16 @@
+# Dipendenze per il modulo di adversarial robustness (backend/robustness/)
+# Servizio separato da backend/api/ per via delle dipendenze pesanti
+# (TensorFlow, PyTorch, ART) non necessarie al resto del backend.
+
+tensorflow>=2.21.0
+opencv-python>=4.13.0
+numpy>=1.26.0
+scipy>=1.17.0
+Pillow>=10.0.0
+
+# Attacchi black-box su vettori/query (HSJ, Boundary, ZOO)
+adversarial-robustness-toolbox>=1.20.1
+
+# Attacco SimBA (implementazione custom del tirocinio, richiede PyTorch)
+torch>=2.0.0
+torchvision>=0.15.0

@@ -253,6 +253,59 @@ creeremo.
 - ⬜ **Decisione dataset**: bloodstain o CIFAR-10 — da chiudere quando si
   arriva a questo modulo
   → `backend/robustness/`, `experiments/`
+- 🔶 **App mobile come "telecomando" per gli attacchi adversarial**
+  (in corso — backend pronto e verificato, endpoint e app non ancora fatti) —
+  l'app NON esegue gli attacchi (richiederebbero riscrivere in Java
+  codice numerico intensivo, es. NumPy/PyTorch, con alto rischio di bug
+  sottili — vedi decisions-log). L'utente sceglie un'immagine e un
+  attacco dall'app, l'app manda una richiesta HTTP al backend, il
+  backend esegue l'attacco riusando il codice Python del tirocinio quasi
+  invariato, e restituisce immagine perturbata + nuove predizioni.
+  → `backend/robustness/`, `android/app/src/main/java/com/manu/myapp/`
+  (nuova funzionalità UI)
+  - ✅ **Sotto-task: preparazione backend (Boundary)** — script
+    `run_hsj_zoo_boundary_vgg16.py`, `pipeline_predict.py`,
+    `pipeline_predict_vgg16.py` copiati e adattati (percorsi modello
+    unificati in `models/`, import ML reso opzionale). Logica di
+    attacco estratta in una funzione riutilizzabile `run_art_attack()`,
+    pensata per essere chiamata sia da CLI sia da un futuro endpoint.
+    Verificato end-to-end sia nel sandbox di sviluppo sia sul PC reale
+    dell'utente: caricamento modello, attacco Boundary (tramite ART
+    `BlackBoxClassifier`, nessuna dipendenza da PyTorch necessaria per
+    questo attacco), predizione prima/dopo, salvataggio immagine.
+    Corretto un problema di memoria: l'attacco lavorava sull'immagine a
+    risoluzione originale invece che a 224×224 (quella vista dal
+    modello), causando avvisi di allocazione eccessiva e un blocco del
+    PC dell'utente con immagini ad alta risoluzione — risolto
+    ridimensionando prima dell'attacco.
+    `backend/robustness/pipeline_predict.py`,
+    `backend/robustness/pipeline_predict_vgg16.py`,
+    `backend/robustness/run_hsj_zoo_boundary_vgg16.py`,
+    `backend/robustness/requirements.txt`, `models/best_model.keras`,
+    `models/class_indices.json` (percorsi unificati)
+  - ✅ **Sotto-task: preparazione backend (SimBA)** — verificato sul PC
+    reale dell'utente, con successo, dopo un percorso di debug lungo
+    (vedi punto 26-30 del decisions-log): TensorFlow e PyTorch non
+    possono coesistere nello stesso processo dentro Docker (crash a
+    basso livello, verificato empiricamente) — risolto separando SimBA
+    in un servizio Docker indipendente (`backend/robustness_simba/`,
+    solo PyTorch), che interroga il modello VGG16 via HTTP invece di
+    caricarlo in locale.
+    → `backend/robustness_simba/` (intero servizio nuovo)
+  - ✅ **Sotto-task: endpoint HTTP** (`POST /robustness/attack`) —
+    completato e verificato end-to-end per entrambi gli attacchi
+    (Boundary via ART/TensorFlow, SimBA via il servizio separato).
+    Risolti nel percorso: un bug di ordine di avvio dei container
+    (dipendenza invertita nel docker-compose, causava una corsa
+    all'avvio), un endpoint che bloccava l'intero servizio durante un
+    attacco lungo (corretto eseguendo gli attacchi in un thread separato,
+    non sul ciclo principale del servizio), e un errore di
+    serializzazione (numpy.float32 non convertibile automaticamente in
+    JSON).
+    → `backend/robustness/main.py`, `backend/robustness_simba/main.py`,
+    `docker/docker-compose.yml` (nuovo servizio + healthcheck)
+  - ⬜ **Sotto-task: azione nell'app mobile** — non ancora iniziato
+    → `android/app/src/main/java/com/manu/myapp/`
 - ⬜ **Integrazione componente di robustness nel backend**
   → `backend/robustness/`
 

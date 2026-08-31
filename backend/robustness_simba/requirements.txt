@@ -1,0 +1,18 @@
+# Dipendenze per il servizio robustness-simba (backend/robustness_simba/).
+#
+# NOTA IMPORTANTE: TensorFlow NON deve mai essere installato qui.
+# TensorFlow e PyTorch importati nello stesso processo causano un crash
+# (segmentation fault) dentro Docker, verificato empiricamente - vedi
+# decisions-log.md. Questo servizio interroga il modello VGG16 tramite
+# chiamate HTTP al servizio backend/robustness/ (che ha TensorFlow),
+# non caricandolo mai in locale.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+requests>=2.31.0
+
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.26.0
+scipy>=1.17.0
+Pillow>=10.0.0

@@ -1,19 +1,24 @@
 """
-Attacco SimBA su VGG16 (black-box).
+Attacco SimBA (black-box, PyTorch).
 
-Versione adattata per l'integrazione nel backend BPA: la modalita' ML
-classico (--model_type ml) e' stata rimossa da questo file, dato che
-per ora il backend integra solo VGG16 (vedi pipeline_predict.py). Lo
-script originale del tirocinio supporta anche i modelli ML classici;
-questa versione e' un sottoinsieme, non una sostituzione.
+Versione per il servizio isolato robustness-simba: NON importa mai
+TensorFlow (a differenza della versione precedente, che chiamava
+pipeline_predict/TensorFlow in locale). L'interrogazione del modello
+avviene tramite una funzione "predict_fn" fornita dal chiamante:
 
-Uso da linea di comando:
+  - Uso da CLI/test locale (fuori Docker, sullo stesso processo del
+    tirocinio): si puo' ancora passare `model` + `class_names` per usare
+    TensorFlow in locale (utile per test rapidi sul PC, dove TF e
+    PyTorch coesistono senza problemi - il crash e' specifico
+    dell'ambiente Docker, non del codice in se').
+
+  - Uso dal servizio robustness-simba (dentro Docker): si passa
+    `predict_fn`, una funzione che manda le immagini al servizio
+    TensorFlow separato via HTTP e restituisce le probabilita' - nessun
+    import di TensorFlow in questo processo.
+
+Uso da linea di comando (richiede TensorFlow installato in locale):
     python run_simba.py --image_path /percorso/immagine.jpg
-    python run_simba.py --data_root /percorso/cartella --num_runs 10
-
-Uso come libreria (per l'endpoint backend):
-    from run_simba import run_simba_attack
-    result = run_simba_attack(image_rgb_uint8, true_label_index=0)
 """
 
 import os
@@ -24,40 +29,49 @@ import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import numpy as np
-import cv2
 from PIL import Image
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-import pipeline_predict
-from pipeline_predict_vgg16 import DEFAULT_MODEL_PATH
 from simba.simba import SimBA
 
 
 IMG_SIZE = 512
 
 
-class PipelinePredictWrapper(nn.Module):
+class PredictFnWrapper(nn.Module):
+    """
+    Adatta una funzione predict_fn generica (numpy in, numpy out) a un
+    modulo PyTorch, cosi' SimBA (che lavora con tensori torch) puo'
+    chiamarla come se fosse un modello nn.Module qualsiasi.
+    """
 
-    def __init__(self, model_type: str, model):
+    def __init__(self, predict_fn):
         super().__init__()
-        self.model_type = model_type
-        self.model = model
+        self.predict_fn = predict_fn
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: tensore (N, C, H, W) in [0, 1] -> array (N, H, W, C) in [0, 255]
         img_np = x.detach().cpu().numpy().transpose(0, 2, 3, 1)
         img_rgb_255 = (img_np * 255.0).clip(0, 255)
-
-        probs = pipeline_predict.predict_proba_batch(img_rgb_255, self.model_type, self.model)
+        probs = self.predict_fn(img_rgb_255)
         return torch.tensor(probs).float()
 
 
-def get_prediction_details(model_type, model, class_names, img_tensor):
+def _local_predict_fn(model_type, model):
+    """Predict_fn che usa un modello locale (richiede pipeline_predict/TensorFlow importati dal chiamante)."""
+    import pipeline_predict  # import locale: solo se questa modalita' viene davvero usata
+
+    def predict_fn(img_rgb_255_batch: np.ndarray) -> np.ndarray:
+        return pipeline_predict.predict_proba_batch(img_rgb_255_batch, model_type, model)
+
+    return predict_fn
+
+
+def get_prediction_details(predict_fn, class_names, img_tensor):
     img_np = img_tensor.detach().cpu().numpy().transpose(0, 2, 3, 1)
     img_rgb_255 = (img_np * 255.0).clip(0, 255)
-    probs = pipeline_predict.predict_proba_batch(img_rgb_255, model_type, model)[0]
+    probs = predict_fn(img_rgb_255)[0]
     pred_idx = int(np.argmax(probs))
     prediction = class_names[pred_idx]
     prob_dict = dict(zip(class_names, probs))
@@ -70,26 +84,27 @@ def print_prediction_block(label, prediction, prob_dict):
         print(f"      - {cls:<18}: {prob:.2%}")
 
 
-def run_simba_attack(img_rgb_uint8: np.ndarray, model=None, class_names=None,
-                      model_path: str = DEFAULT_MODEL_PATH,
+def run_simba_attack(img_rgb_uint8: np.ndarray, class_names, predict_fn=None,
+                      model=None, model_type: str = "vgg16",
                       max_iters: int = 500, epsilon: float = 0.2,
                       freq_dims: int = 20, pixel_attack: bool = False):
     """
-    Esegue l'attacco SimBA su una singola immagine (funzione pensata per
-    essere richiamata dall'endpoint backend, non da linea di comando).
+    Esegue l'attacco SimBA su una singola immagine.
 
-    img_rgb_uint8: array numpy (H, W, 3), RGB, valori 0-255.
-    model / class_names: se gia' caricati altrove, evita di ricaricare
-        il modello ad ogni chiamata (costoso). Se None, li carica qui.
+    Serve UNA delle due cose per interrogare il modello:
+    - predict_fn: funzione (img_rgb_255_batch: np.ndarray) -> probs np.ndarray,
+      usata dal servizio robustness-simba (chiamata HTTP al servizio TF)
+    - model: modello gia' caricato in locale (richiede pipeline_predict/
+      TensorFlow importabili nel processo corrente - solo per uso CLI/test)
 
     Restituisce un dizionario con: immagine avversaria (uint8 RGB),
     predizione originale, predizione avversaria, esito (SUCC/FAIL),
     probabilita' per classe originali e avversarie.
     """
-    if model is None:
-        model = pipeline_predict.load_model("vgg16", model_path)
-    if class_names is None:
-        class_names = pipeline_predict.get_class_names("vgg16", model)
+    if predict_fn is None:
+        if model is None:
+            raise ValueError("Serve predict_fn oppure model")
+        predict_fn = _local_predict_fn(model_type, model)
 
     transform = transforms.Compose([
         transforms.ToPILImage(),
@@ -99,10 +114,10 @@ def run_simba_attack(img_rgb_uint8: np.ndarray, model=None, class_names=None,
     img_tensor = transform(img_rgb_uint8).unsqueeze(0)
     label_tensor = torch.tensor([0])  # placeholder, non e' un attacco targeted
 
-    model_wrapped = PipelinePredictWrapper("vgg16", model)
+    model_wrapped = PredictFnWrapper(predict_fn)
     attacker = SimBA(model_wrapped, dataset=None, image_size=IMG_SIZE)
 
-    pred_orig, probs_orig = get_prediction_details("vgg16", model, class_names, img_tensor)
+    pred_orig, probs_orig = get_prediction_details(predict_fn, class_names, img_tensor)
 
     adv_batch, probs, succs, queries, l2, linf = attacker.simba_batch(
         img_tensor,
@@ -112,11 +127,11 @@ def run_simba_attack(img_rgb_uint8: np.ndarray, model=None, class_names=None,
         stride=7,
         epsilon=epsilon,
         pixel_attack=pixel_attack,
-        log_every=max_iters,  # log solo all'ultima iterazione (endpoint silenzioso)
+        log_every=max_iters,  # log solo all'ultima iterazione
     )
     adv_tensor = adv_batch[0]
 
-    pred_adv, probs_adv = get_prediction_details("vgg16", model, class_names, adv_tensor.unsqueeze(0))
+    pred_adv, probs_adv = get_prediction_details(predict_fn, class_names, adv_tensor.unsqueeze(0))
 
     success = pred_orig != pred_adv
 
@@ -133,14 +148,19 @@ def run_simba_attack(img_rgb_uint8: np.ndarray, model=None, class_names=None,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SimBA Attack on VGG16 (backend BPA)")
+    parser = argparse.ArgumentParser(description="SimBA Attack (CLI, richiede TensorFlow in locale)")
     parser.add_argument("--image_path", type=str, required=True)
-    parser.add_argument("--model_path", type=str, default=DEFAULT_MODEL_PATH)
+    parser.add_argument("--model_path", type=str, default="models/best_model.keras")
     parser.add_argument("--epsilon", type=float, default=0.2)
     parser.add_argument("--freq_dims", type=int, default=20)
     parser.add_argument("--pixel_attack", action="store_true")
     parser.add_argument("--max_iters", type=int, default=500, help="Numero di iterazioni (default 500)")
     args = parser.parse_args()
+
+    # Import locale: solo la modalita' CLI ne ha bisogno (richiede TensorFlow
+    # installato nello stesso ambiente - va bene sul PC nudo, non dentro
+    # il container robustness-simba, che non lo include)
+    import pipeline_predict
 
     output_dir = os.path.join("adversarial_image", "simba_vgg16")
     os.makedirs(output_dir, exist_ok=True)
@@ -154,7 +174,7 @@ if __name__ == "__main__":
     print(f"Classi ({len(class_names)}): {class_names}")
 
     result = run_simba_attack(
-        img_rgb_uint8, model=model, class_names=class_names,
+        img_rgb_uint8, class_names, model=model,
         epsilon=args.epsilon, freq_dims=args.freq_dims, pixel_attack=args.pixel_attack,
         max_iters=args.max_iters,
     )
@@ -164,7 +184,7 @@ if __name__ == "__main__":
     print(f"  ESITO ATTACCO: {'SUCC' if result['success'] else 'FAIL'}")
 
     base_name = os.path.splitext(os.path.basename(args.image_path))[0]
-    adv_bgr = cv2.cvtColor(result["adversarial_image_rgb"], cv2.COLOR_RGB2BGR)
+    adv_img = Image.fromarray(result["adversarial_image_rgb"], mode="RGB")
     out_path = os.path.join(output_dir, f"{base_name}_adv.png")
-    cv2.imwrite(out_path, adv_bgr)
+    adv_img.save(out_path)
     print(f"Salvato: {out_path}")

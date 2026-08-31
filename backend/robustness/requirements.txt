@@ -1,6 +1,16 @@
-# Dipendenze per il modulo di adversarial robustness (backend/robustness/)
-# Servizio separato da backend/api/ per via delle dipendenze pesanti
-# (TensorFlow, PyTorch, ART) non necessarie al resto del backend.
+# Dipendenze per il servizio robustness (backend/robustness/), che gestisce
+# gli attacchi basati su ART/TensorFlow (Boundary, HSJ, ZOO).
+#
+# NOTA IMPORTANTE: PyTorch NON deve mai essere installato qui.
+# TensorFlow e PyTorch importati nello stesso processo causano un crash
+# (segmentation fault) dentro Docker, verificato empiricamente - vedi
+# decisions-log.md per la diagnosi completa. L'attacco SimBA (che
+# richiede PyTorch) vive nel servizio separato backend/robustness_simba/,
+# interrogato via HTTP da questo servizio quando richiesto.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+requests>=2.31.0
 
 tensorflow>=2.21.0
 opencv-python>=4.13.0
@@ -10,7 +20,3 @@ Pillow>=10.0.0
 
 # Attacchi black-box su vettori/query (HSJ, Boundary, ZOO)
 adversarial-robustness-toolbox>=1.20.1
-
-# Attacco SimBA (implementazione custom del tirocinio, richiede PyTorch)
-torch>=2.0.0
-torchvision>=0.15.0

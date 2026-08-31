@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   api:
     build:
@@ -10,11 +12,13 @@ services:
       DB_NAME: bpa
       DB_USER: bpa
       DB_PASSWORD: bpa
-      AUTH_ENABLED: "false"
+      AUTH_ENABLED: "false"      # metti "true" per attivare il controllo API key
       API_KEY: "changeme"
       DATASET_PATH: /data/dataset
       CAPTURED_IMAGES_PATH: /data/captured
     volumes:
+      # Dataset montato dall'esterno: cambiare qui il path per passare
+      # da bpa a un altro dataset (es. cifar10), senza rebuild.
       - ../data/dataset:/data/dataset:ro
       - ../data/captured:/data/captured
     depends_on:
@@ -31,6 +35,49 @@ services:
       - ../backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
+
+  robustness:
+    build:
+      context: ../backend/robustness
+    ports:
+      - "8001:8001"
+    environment:
+      AUTH_ENABLED: "false"      # stesso meccanismo del servizio api
+      API_KEY: "changeme"
+      SIMBA_SERVICE_URL: "http://robustness-simba:8001"
+    volumes:
+      # Modello e class_indices.json condivisi, montati dall'esterno
+      # (come il dataset per il servizio api) - nessuna copia duplicata
+      # dentro l'immagine. Montato su ./models (percorso relativo alla
+      # working directory del container, /app) per restare coerente con
+      # i percorsi di default gia' usati da pipeline_predict_vgg16.py.
+      - ../models:/app/models:ro
+    healthcheck:
+      # Usato da robustness-simba (sotto) per aspettare che questo
+      # servizio sia DAVVERO pronto (modello caricato e "riscaldato"),
+      # non solo avviato - evita una corsa all'avvio in cui SimBA prova
+      # a chiamare TensorFlow prima che sia pronto ad ascoltare.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  robustness-simba:
+    build:
+      context: ../backend/robustness_simba
+    ports:
+      - "8002:8001"     # porta host diversa (8002) per non confliggere
+                        # con "robustness" sopra, che usa 8001 sull'host;
+                        # internamente il container ascolta sempre su 8001
+    environment:
+      AUTH_ENABLED: "false"
+      API_KEY: "changeme"
+      TF_SERVICE_URL: "http://robustness:8001"
+    depends_on:
+      robustness:
+        condition: service_healthy   # aspetta che TensorFlow sia pronto,
+                                      # non solo che il container sia partito
 
 volumes:
   db_data:

@@ -9,6 +9,13 @@
         android:orientation="vertical"
         android:padding="24dp">
 
+        <Button
+            android:id="@+id/buttonAdvHistory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/adv_view_history" />
+
         <ImageView
             android:id="@+id/imageAdvPreview"
             android:layout_width="200dp"
@@ -108,6 +115,14 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/textAdvAttackStarted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColor="#2E7D32"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/textAdvError"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -168,6 +183,9 @@
                         android:layout_height="140dp"
                         android:layout_marginTop="4dp"
                         android:scaleType="centerCrop"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?attr/selectableItemBackground"
                         android:contentDescription="@string/adv_original_label" />
 
                     <TextView
@@ -197,6 +215,9 @@
                         android:layout_height="140dp"
                         android:layout_marginTop="4dp"
                         android:scaleType="centerCrop"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?attr/selectableItemBackground"
                         android:contentDescription="@string/adv_adversarial_label" />
 
                     <TextView

@@ -10,8 +10,6 @@ import androidx.lifecycle.MutableLiveData;
  * cambia stato o arriva un nuovo risultato di classificazione; le
  * schermate (es. Home) si limitano ad osservarli e aggiornare l'interfaccia.
  *
- * Singleton semplice: sufficiente per un'app di questa dimensione, senza
- * bisogno di un vero framework di dependency injection.
  */
 public class AppState {
 

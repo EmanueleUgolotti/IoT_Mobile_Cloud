@@ -21,7 +21,11 @@ import java.nio.charset.StandardCharsets;
 public class RobustnessApiClient {
 
     // Gli attacchi (specialmente SimBA) possono richiedere diversi minuti
-    private static final int READ_TIMEOUT_MS = 5 * 60 * 1000;
+    // 15 minuti: gli attacchi (specialmente su CPU senza GPU, con Docker
+    // e altre app in esecuzione) possono richiedere diversi minuti -
+    // osservato empiricamente fino a ~8 minuti per Boundary con budget
+    // di default (50 iterazioni). Margine ampio per evitare falsi timeout.
+    private static final int READ_TIMEOUT_MS = 15 * 60 * 1000;
     private static final int CONNECT_TIMEOUT_MS = 10 * 1000;
 
     /**

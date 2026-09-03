@@ -1,6 +1,7 @@
 package com.manu.myapp.ui;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -25,8 +26,15 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.manu.myapp.AdversarialAttackService;
+import com.manu.myapp.AdversarialHistoryDbHelper;
+import com.manu.myapp.AdversarialHistoryItem;
+import com.manu.myapp.Classifier;
 import com.manu.myapp.HistoryDbHelper;
 import com.manu.myapp.HistoryItem;
+import com.manu.myapp.ImageStorage;
+import com.manu.myapp.ImageUtils;
+import com.manu.myapp.ImageViewerActivity;
 import com.manu.myapp.R;
 import com.manu.myapp.RobustnessApiClient;
 import com.manu.myapp.SettingsManager;
@@ -48,6 +56,11 @@ import java.util.concurrent.Executors;
  * l'attacco - sceglie un'immagine, la manda al backend (che gira sul
  * PC/server, non sul telefono) via RobustnessApiClient, e mostra il
  * confronto tra la predizione originale e quella dopo l'attacco.
+ *
+ * Ogni attacco riuscito o meno viene salvato in una cronologia dedicata
+ * (AdversarialHistoryDbHelper), richiamabile dal pulsante "Cronologia
+ * attacchi". Le due immagini del risultato (originale/avversaria) sono
+ * toccabili per essere viste ingrandite (ImageViewerActivity).
  */
 public class AdversarialTestFragment extends Fragment {
 
@@ -55,6 +68,7 @@ public class AdversarialTestFragment extends Fragment {
     private RadioGroup radioGroupAttack;
     private EditText editMaxIter;
     private LinearLayout layoutProgress;
+    private TextView textAttackStarted;
     private TextView textError;
     private LinearLayout layoutResult;
     private TextView textOutcome;
@@ -66,9 +80,15 @@ public class AdversarialTestFragment extends Fragment {
     private LinearLayout containerProbsAdversarial;
 
     private Bitmap selectedBitmap;
+    // Percorsi delle immagini dell'ultimo risultato mostrato, salvate su
+    // storage interno - servono per aprire ImageViewerActivity al tocco
+    private String lastOriginalImagePath;
+    private String lastAdversarialImagePath;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private ActivityResultLauncher<String> pickImageLauncher;
+    private ActivityResultLauncher<String> notificationPermissionLauncher;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -78,6 +98,17 @@ public class AdversarialTestFragment extends Fragment {
                 uri -> {
                     if (uri != null) {
                         loadSelectedImage(uri);
+                    }
+                });
+
+        notificationPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                granted -> {
+                    if (granted) {
+                        runAttack(); // riprova ora che il permesso e' stato concesso
+                    } else {
+                        textError.setText(getString(R.string.adv_error_notification_permission));
+                        textError.setVisibility(View.VISIBLE);
                     }
                 });
     }
@@ -97,6 +128,7 @@ public class AdversarialTestFragment extends Fragment {
         radioGroupAttack = view.findViewById(R.id.radioGroupAttack);
         editMaxIter = view.findViewById(R.id.editMaxIter);
         layoutProgress = view.findViewById(R.id.layoutAdvProgress);
+        textAttackStarted = view.findViewById(R.id.textAdvAttackStarted);
         textError = view.findViewById(R.id.textAdvError);
         layoutResult = view.findViewById(R.id.layoutAdvResult);
         textOutcome = view.findViewById(R.id.textAdvOutcome);
@@ -110,11 +142,30 @@ public class AdversarialTestFragment extends Fragment {
         Button buttonPick = view.findViewById(R.id.buttonAdvPickImage);
         Button buttonPickFromHistory = view.findViewById(R.id.buttonAdvPickFromHistory);
         Button buttonRun = view.findViewById(R.id.buttonRunAttack);
+        Button buttonViewHistory = view.findViewById(R.id.buttonAdvHistory);
 
         buttonPick.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
         buttonPickFromHistory.setOnClickListener(v -> pickFromHistory());
         buttonRun.setOnClickListener(v -> runAttack());
+        buttonViewHistory.setOnClickListener(v -> viewAttackHistory());
+
+        imageOriginal.setOnClickListener(v -> openImageViewer(
+                lastOriginalImagePath, getString(R.string.adv_original_label)));
+        imagePerturbed.setOnClickListener(v -> openImageViewer(
+                lastAdversarialImagePath, getString(R.string.adv_adversarial_label)));
     }
+
+    private void openImageViewer(String imagePath, String title) {
+        if (imagePath == null || getContext() == null) {
+            return;
+        }
+        Intent intent = new Intent(getContext(), ImageViewerActivity.class);
+        intent.putExtra(ImageViewerActivity.EXTRA_IMAGE_PATH, imagePath);
+        intent.putExtra(ImageViewerActivity.EXTRA_TITLE, title);
+        startActivity(intent);
+    }
+
+    // --- Scelta immagine di partenza (galleria o cronologia classificazioni) ---
 
     private void pickFromHistory() {
         if (getContext() == null) {
@@ -168,6 +219,7 @@ public class AdversarialTestFragment extends Fragment {
             textError.setVisibility(View.VISIBLE);
             return;
         }
+        bitmap = ImageUtils.capMaxDimension(bitmap);
 
         selectedBitmap = bitmap;
         imagePreview.setImageBitmap(bitmap);
@@ -186,6 +238,11 @@ public class AdversarialTestFragment extends Fragment {
                 input.close();
             }
             if (bitmap != null) {
+                // Fondamentale: senza questo limite, un'immagine ad alta
+                // risoluzione dalla galleria puo' causare esaurimento di
+                // memoria/blocco del PC lato backend durante un attacco
+                // (stesso problema gia' risolto per il Test Manuale).
+                bitmap = ImageUtils.capMaxDimension(bitmap);
                 selectedBitmap = bitmap;
                 imagePreview.setImageBitmap(bitmap);
                 layoutResult.setVisibility(View.GONE);
@@ -197,11 +254,18 @@ public class AdversarialTestFragment extends Fragment {
         }
     }
 
+    // --- Esecuzione dell'attacco ---
+
     private void runAttack() {
         if (selectedBitmap == null) {
             textError.setText(getString(R.string.adv_error_no_image));
             textError.setVisibility(View.VISIBLE);
             return;
+        }
+
+        if (!hasNotificationPermission()) {
+            requestNotificationPermission();
+            return; // l'utente riprovera' dopo aver concesso il permesso
         }
 
         String attackName = radioGroupAttack.getCheckedRadioButtonId() == R.id.radioAttackSimba
@@ -219,27 +283,39 @@ public class AdversarialTestFragment extends Fragment {
 
         String baseUrl = SettingsManager.getRobustnessUrl(requireContext());
 
-        layoutProgress.setVisibility(View.VISIBLE);
+        // Salva l'immagine su un file temporaneo: il servizio la legge da
+        // li', invece di passarla come extra dell'Intent (che ha un limite
+        // di dimensione stretto per immagini anche solo moderate)
+        String tempImagePath = ImageStorage.save(requireContext(), selectedBitmap, "adv_pending");
+
+        Intent serviceIntent = new Intent(requireContext(), AdversarialAttackService.class);
+        serviceIntent.putExtra(AdversarialAttackService.EXTRA_IMAGE_PATH, tempImagePath);
+        serviceIntent.putExtra(AdversarialAttackService.EXTRA_ATTACK_NAME, attackName);
+        if (maxIter != null) {
+            serviceIntent.putExtra(AdversarialAttackService.EXTRA_MAX_ITER, maxIter);
+        }
+        serviceIntent.putExtra(AdversarialAttackService.EXTRA_BASE_URL, baseUrl);
+
+        requireContext().startForegroundService(serviceIntent);
+
         textError.setVisibility(View.GONE);
         layoutResult.setVisibility(View.GONE);
+        layoutProgress.setVisibility(View.GONE);
+        textAttackStarted.setText(getString(R.string.adv_attack_started_message));
+        textAttackStarted.setVisibility(View.VISIBLE);
+    }
 
-        String imageB64 = bitmapToBase64(selectedBitmap);
-        Integer finalMaxIter = maxIter;
+    private boolean hasNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            return true; // permesso non richiesto prima di Android 13
+        }
+        return androidx.core.content.ContextCompat.checkSelfPermission(requireContext(),
+                android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
 
-        executor.execute(() -> {
-            try {
-                JSONObject result = RobustnessApiClient.runAttack(
-                        baseUrl, imageB64, attackName, finalMaxIter);
-
-                Handler mainHandler = new Handler(Looper.getMainLooper());
-                mainHandler.post(() -> showResult(result));
-
-            } catch (Exception e) {
-                Handler mainHandler = new Handler(Looper.getMainLooper());
-                String message = e.getMessage();
-                mainHandler.post(() -> showError(message));
-            }
-        });
+    private void requestNotificationPermission() {
+        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS);
     }
 
     private String bitmapToBase64(Bitmap bitmap) {
@@ -257,57 +333,101 @@ public class AdversarialTestFragment extends Fragment {
         textError.setVisibility(View.VISIBLE);
     }
 
-    private void showResult(JSONObject result) {
-        if (getView() == null) {
+    // --- Cronologia degli attacchi ---
+
+    private void viewAttackHistory() {
+        if (getContext() == null) {
             return;
         }
-        layoutProgress.setVisibility(View.GONE);
 
-        try {
-            boolean success = result.getBoolean("success");
-            String predOriginal = result.getString("prediction_original");
-            String predAdversarial = result.getString("prediction_adversarial");
-            String advImageB64 = result.getString("adversarial_image_data");
+        executor.execute(() -> {
+            AdversarialHistoryDbHelper db = new AdversarialHistoryDbHelper(requireContext());
+            List<AdversarialHistoryItem> items = db.getAll();
 
-            textOutcome.setText(success
-                    ? getString(R.string.adv_outcome_success)
-                    : getString(R.string.adv_outcome_fail));
-            textOutcome.setTextColor(success ? 0xFFC62828 : 0xFF2E7D32);
-
-            imageOriginal.setImageBitmap(selectedBitmap);
-            textOriginalLabel.setText(predOriginal);
-
-            byte[] advBytes = Base64.decode(advImageB64, Base64.DEFAULT);
-            Bitmap advBitmap = BitmapFactory.decodeByteArray(advBytes, 0, advBytes.length);
-            imagePerturbed.setImageBitmap(advBitmap);
-            textAdversarialLabel.setText(predAdversarial);
-
-            fillProbabilities(containerProbsOriginal, result.getJSONObject("probabilities_original"));
-            fillProbabilities(containerProbsAdversarial, result.getJSONObject("probabilities_adversarial"));
-
-            layoutResult.setVisibility(View.VISIBLE);
-
-        } catch (Exception e) {
-            showError(e.getMessage());
-        }
+            Handler mainHandler = new Handler(Looper.getMainLooper());
+            mainHandler.post(() -> showAttackHistoryPicker(items));
+        });
     }
 
-    private void fillProbabilities(LinearLayout container, JSONObject probs) throws Exception {
+    private void showAttackHistoryPicker(List<AdversarialHistoryItem> items) {
+        if (getContext() == null) {
+            return;
+        }
+
+        if (items.isEmpty()) {
+            textError.setText(getString(R.string.adv_history_empty));
+            textError.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM HH:mm", Locale.getDefault());
+        String[] labels = new String[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            AdversarialHistoryItem item = items.get(i);
+            String outcome = item.success
+                    ? getString(R.string.adv_outcome_success_short)
+                    : getString(R.string.adv_outcome_fail_short);
+            String time = dateFormat.format(new Date(item.timestampMillis));
+            labels[i] = item.attackName + " — " + item.predictionOriginal + " → "
+                    + item.predictionAdversarial + " (" + outcome + ", " + time + ")";
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.adv_view_history)
+                .setItems(labels, (dialog, which) -> displayStoredAttack(items.get(which)))
+                .show();
+    }
+
+    /** Rimostra un attacco passato, riusando la stessa area di risultato. */
+    private void displayStoredAttack(AdversarialHistoryItem item) {
+        if (item.imagePathOriginal == null || item.imagePathAdversarial == null) {
+            return;
+        }
+
+        Bitmap original = BitmapFactory.decodeFile(item.imagePathOriginal);
+        Bitmap adversarial = BitmapFactory.decodeFile(item.imagePathAdversarial);
+        if (original == null || adversarial == null) {
+            textError.setText(getString(R.string.adv_error_loading_image));
+            textError.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        selectedBitmap = original;
+        imagePreview.setImageBitmap(original);
+
+        lastOriginalImagePath = item.imagePathOriginal;
+        lastAdversarialImagePath = item.imagePathAdversarial;
+
+        textOutcome.setText(item.success
+                ? getString(R.string.adv_outcome_success)
+                : getString(R.string.adv_outcome_fail));
+        textOutcome.setTextColor(item.success ? 0xFFC62828 : 0xFF2E7D32);
+
+        imageOriginal.setImageBitmap(original);
+        textOriginalLabel.setText(item.predictionOriginal);
+
+        imagePerturbed.setImageBitmap(adversarial);
+        textAdversarialLabel.setText(item.predictionAdversarial);
+
+        fillProbabilitiesFromArray(containerProbsOriginal, item.probabilitiesOriginal);
+        fillProbabilitiesFromArray(containerProbsAdversarial, item.probabilitiesAdversarial);
+
+        textError.setVisibility(View.GONE);
+        layoutResult.setVisibility(View.VISIBLE);
+    }
+
+    private void fillProbabilitiesFromArray(LinearLayout container, float[] probs) {
         container.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(getContext());
 
-        Iterator<String> keys = probs.keys();
-        while (keys.hasNext()) {
-            String className = keys.next();
-            double prob = probs.getDouble(className);
-
+        for (int i = 0; i < probs.length && i < Classifier.CLASS_NAMES.length; i++) {
             View row = inflater.inflate(R.layout.item_probability_bar, container, false);
             TextView textClassName = row.findViewById(R.id.textClassName);
             TextView textClassPercent = row.findViewById(R.id.textClassPercent);
             ProgressBar progressClass = row.findViewById(R.id.progressClass);
 
-            int percent = (int) Math.round(prob * 100);
-            textClassName.setText(className);
+            int percent = Math.round(probs[i] * 100);
+            textClassName.setText(Classifier.CLASS_NAMES[i]);
             textClassPercent.setText(percent + "%");
             progressClass.setProgress(percent);
 

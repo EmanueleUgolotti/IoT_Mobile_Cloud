@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Permette il traffico HTTP non cifrato (senza https://) per l'intera
+    app. Necessario perche' il backend degli attacchi adversarial gira
+    su un server locale di sviluppo (PC/Docker), senza certificato
+    HTTPS - Android blocca il traffico HTTP semplice di default dalle
+    versioni piu' recenti, per sicurezza.
+
+    In un'app pubblicata andrebbe invece configurato un vero server HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

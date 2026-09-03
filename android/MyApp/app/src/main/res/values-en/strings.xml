@@ -93,5 +93,25 @@
     <string name="adv_adversarial_label">After attack</string>
     <string name="adv_section_probabilities_original">Original probabilities</string>
     <string name="adv_section_probabilities_adversarial">Probabilities after attack</string>
+    <string name="adv_view_history">Attack history</string>
+    <string name="adv_history_empty">No attacks run yet</string>
+    <string name="adv_outcome_success_short">succeeded</string>
+    <string name="adv_outcome_fail_short">failed</string>
+
+    <!-- Full-screen image viewer -->
+    <string name="viewer_default_title">Image</string>
+    <string name="image_viewer_description">Full-screen image</string>
+
+    <!-- Background attack execution -->
+    <string name="adv_attack_started_message">Attack started in background. You\'ll get a notification when it\'s done — you can switch screens or leave the app.</string>
+    <string name="adv_error_notification_permission">Notification permission is needed to alert you when the attack finishes</string>
+    <string name="adv_notification_channel_name">Adversarial attacks</string>
+    <string name="adv_notification_channel_description">Progress and completion notifications for adversarial attacks</string>
+    <string name="adv_notification_progress_title">Attack in progress</string>
+    <string name="adv_notification_progress_text">Running %1$s attack…</string>
+    <string name="adv_notification_success_title">Attack succeeded</string>
+    <string name="adv_notification_fail_title">Attack failed</string>
+    <string name="adv_notification_error_title">Attack error</string>
+    <string name="adv_notification_result_text">%1$s attack completed — open Attack history to see the result</string>
 
 </resources>

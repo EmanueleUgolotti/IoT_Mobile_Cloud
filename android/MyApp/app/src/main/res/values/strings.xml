@@ -93,5 +93,25 @@
     <string name="adv_adversarial_label">Dopo l\'attacco</string>
     <string name="adv_section_probabilities_original">Probabilità originali</string>
     <string name="adv_section_probabilities_adversarial">Probabilità dopo l\'attacco</string>
+    <string name="adv_view_history">Cronologia attacchi</string>
+    <string name="adv_history_empty">Nessun attacco ancora eseguito</string>
+    <string name="adv_outcome_success_short">riuscito</string>
+    <string name="adv_outcome_fail_short">non riuscito</string>
+
+    <!-- Visualizzatore immagine ingrandita -->
+    <string name="viewer_default_title">Immagine</string>
+    <string name="image_viewer_description">Immagine a schermo intero</string>
+
+    <!-- Esecuzione attacco in background -->
+    <string name="adv_attack_started_message">Attacco avviato in background. Riceverai una notifica al termine — puoi cambiare schermata o uscire dall\'app.</string>
+    <string name="adv_error_notification_permission">Serve il permesso di notifica per avvisarti quando l\'attacco finisce</string>
+    <string name="adv_notification_channel_name">Attacchi adversarial</string>
+    <string name="adv_notification_channel_description">Notifiche di avanzamento e completamento degli attacchi adversarial</string>
+    <string name="adv_notification_progress_title">Attacco in corso</string>
+    <string name="adv_notification_progress_text">Attacco %1$s in esecuzione…</string>
+    <string name="adv_notification_success_title">Attacco riuscito</string>
+    <string name="adv_notification_fail_title">Attacco non riuscito</string>
+    <string name="adv_notification_error_title">Errore nell\'attacco</string>
+    <string name="adv_notification_result_text">Attacco %1$s completato — apri la Cronologia attacchi per vedere il risultato</string>
 
 </resources>

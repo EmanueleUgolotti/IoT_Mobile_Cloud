@@ -23,6 +23,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText editServerPort;
     private RadioGroup radioGroupTheme;
     private RadioGroup radioGroupLanguage;
+    private EditText editRobustnessUrl;
     private TextView textSettingsSaved;
 
     @Override
@@ -41,6 +42,7 @@ public class SettingsActivity extends AppCompatActivity {
         editServerPort = findViewById(R.id.editServerPort);
         radioGroupTheme = findViewById(R.id.radioGroupTheme);
         radioGroupLanguage = findViewById(R.id.radioGroupLanguage);
+        editRobustnessUrl = findViewById(R.id.editRobustnessUrl);
         textSettingsSaved = findViewById(R.id.textSettingsSaved);
         Button buttonSave = findViewById(R.id.buttonSaveSettings);
 
@@ -67,6 +69,8 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             ((RadioButton) findViewById(R.id.radioLanguageIt)).setChecked(true);
         }
+
+        editRobustnessUrl.setText(SettingsManager.getRobustnessUrl(this));
     }
 
     private void saveSettings() {
@@ -102,6 +106,12 @@ public class SettingsActivity extends AppCompatActivity {
                 : SettingsManager.LANGUAGE_IT;
         SettingsManager.setLanguage(this, language);
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(language));
+
+        // Indirizzo backend attacchi adversarial
+        String robustnessUrl = editRobustnessUrl.getText().toString().trim();
+        if (!robustnessUrl.isEmpty()) {
+            SettingsManager.setRobustnessUrl(this, robustnessUrl);
+        }
 
         textSettingsSaved.setVisibility(android.view.View.VISIBLE);
     }

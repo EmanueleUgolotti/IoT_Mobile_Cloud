@@ -66,5 +66,32 @@
     <string name="settings_language_en">English</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved_confirmation">Settings saved</string>
+    <string name="settings_section_robustness">Adversarial attacks server</string>
+    <string name="settings_robustness_url_hint">http://192.168.1.100:8001</string>
+    <string name="settings_robustness_url_note">Address of the backend that runs the attacks (the PC/server, not the phone). Must be on the same WiFi network.</string>
+
+    <!-- Adversarial test -->
+    <string name="nav_adversarial">Adversarial</string>
+    <string name="adv_image_preview_description">Selected image preview</string>
+    <string name="adv_pick_image">Choose image</string>
+    <string name="adv_pick_from_history">Choose from History</string>
+    <string name="adv_error_history_empty">History is empty, classify some images first</string>
+    <string name="adv_section_attack">Attack</string>
+    <string name="adv_attack_boundary">Boundary</string>
+    <string name="adv_attack_simba">SimBA</string>
+    <string name="adv_max_iter_label">Number of iterations (optional)</string>
+    <string name="adv_max_iter_hint">Leave empty for default</string>
+    <string name="adv_run_attack">Run attack</string>
+    <string name="adv_running">Attack in progress, may take a few minutes…</string>
+    <string name="adv_error_no_image">Select an image first</string>
+    <string name="adv_error_loading_image">Error loading the image</string>
+    <string name="adv_error_generic">Error: %1$s</string>
+    <string name="adv_section_result">Result</string>
+    <string name="adv_outcome_success">Attack succeeded: classification changed</string>
+    <string name="adv_outcome_fail">Attack failed: classification unchanged</string>
+    <string name="adv_original_label">Original</string>
+    <string name="adv_adversarial_label">After attack</string>
+    <string name="adv_section_probabilities_original">Original probabilities</string>
+    <string name="adv_section_probabilities_adversarial">Probabilities after attack</string>
 
 </resources>

@@ -66,5 +66,32 @@
     <string name="settings_language_en">English</string>
     <string name="settings_save">Salva</string>
     <string name="settings_saved_confirmation">Impostazioni salvate</string>
+    <string name="settings_section_robustness">Server attacchi adversarial</string>
+    <string name="settings_robustness_url_hint">http://192.168.1.100:8001</string>
+    <string name="settings_robustness_url_note">Indirizzo del backend che esegue gli attacchi (il PC/server, non il telefono). Deve essere sulla stessa rete WiFi.</string>
+
+    <!-- Test adversarial -->
+    <string name="nav_adversarial">Adversarial</string>
+    <string name="adv_image_preview_description">Anteprima immagine selezionata</string>
+    <string name="adv_pick_image">Scegli immagine</string>
+    <string name="adv_pick_from_history">Scegli dalla Cronologia</string>
+    <string name="adv_error_history_empty">La cronologia è vuota, classifica prima qualche immagine</string>
+    <string name="adv_section_attack">Attacco</string>
+    <string name="adv_attack_boundary">Boundary</string>
+    <string name="adv_attack_simba">SimBA</string>
+    <string name="adv_max_iter_label">Numero di iterazioni (facoltativo)</string>
+    <string name="adv_max_iter_hint">Lascia vuoto per il default</string>
+    <string name="adv_run_attack">Esegui attacco</string>
+    <string name="adv_running">Attacco in corso, può richiedere alcuni minuti…</string>
+    <string name="adv_error_no_image">Seleziona prima un\'immagine</string>
+    <string name="adv_error_loading_image">Errore nel caricamento dell\'immagine</string>
+    <string name="adv_error_generic">Errore: %1$s</string>
+    <string name="adv_section_result">Risultato</string>
+    <string name="adv_outcome_success">Attacco riuscito: la classificazione è cambiata</string>
+    <string name="adv_outcome_fail">Attacco non riuscito: la classificazione non è cambiata</string>
+    <string name="adv_original_label">Originale</string>
+    <string name="adv_adversarial_label">Dopo l\'attacco</string>
+    <string name="adv_section_probabilities_original">Probabilità originali</string>
+    <string name="adv_section_probabilities_adversarial">Probabilità dopo l\'attacco</string>
 
 </resources>

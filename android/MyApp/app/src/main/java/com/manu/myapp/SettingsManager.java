@@ -13,8 +13,10 @@ public class SettingsManager {
     private static final String KEY_PORT = "server_port";
     private static final String KEY_THEME = "theme_mode";
     private static final String KEY_LANGUAGE = "language_code";
+    private static final String KEY_ROBUSTNESS_URL = "robustness_url";
 
     public static final int DEFAULT_PORT = 8080;
+    public static final String DEFAULT_ROBUSTNESS_URL = "http://192.168.1.100:8001";
 
     public static final String THEME_LIGHT = "light";
     public static final String THEME_DARK = "dark";
@@ -45,6 +47,14 @@ public class SettingsManager {
 
     public static void setLanguage(Context context, String languageCode) {
         getPrefs(context).edit().putString(KEY_LANGUAGE, languageCode).apply();
+    }
+
+    public static String getRobustnessUrl(Context context) {
+        return getPrefs(context).getString(KEY_ROBUSTNESS_URL, DEFAULT_ROBUSTNESS_URL);
+    }
+
+    public static void setRobustnessUrl(Context context, String url) {
+        getPrefs(context).edit().putString(KEY_ROBUSTNESS_URL, url).apply();
     }
 
     private static SharedPreferences getPrefs(Context context) {

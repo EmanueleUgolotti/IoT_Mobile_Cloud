@@ -29,4 +29,10 @@
         android:label="@string/nav_profile"
         tools:layout="@layout/fragment_profile" />
 
+    <fragment
+        android:id="@+id/adversarialTestFragment"
+        android:name="com.manu.myapp.ui.AdversarialTestFragment"
+        android:label="@string/nav_adversarial"
+        tools:layout="@layout/fragment_adversarial_test" />
+
 </navigation>

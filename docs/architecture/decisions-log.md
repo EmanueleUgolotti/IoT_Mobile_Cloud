@@ -324,3 +324,31 @@ dove il codice lavora "più in grande" del necessario prima di integrarlo
 in un contesto con vincoli hardware diversi.
 
 
+## 31. Perché l'attacco gira in un Foreground Service, non più dentro il Fragment
+ 
+**Il bisogno**: gli attacchi possono richiedere diversi minuti (osservato
+fino a ~8 minuti per Boundary senza GPU) - tenere l'utente bloccato sulla
+stessa schermata per tutto quel tempo, senza poter fare altro col
+telefono, e senza sapere quando l'attacco finisce se non guardando lo
+schermo, era un'esperienza scomoda.
+ 
+**Perché un Foreground Service e non un semplice thread in background
+nel Fragment**: un thread avviato da un Fragment/Activity puo' essere
+interrotto dal sistema se l'utente esce dall'app e il processo viene
+gia deprioritizzato o terminato per liberare memoria - Android non
+garantisce che un lavoro "invisibile" continui. Un Foreground Service e'
+il meccanismo Android pensato apposta per lavori che l'utente ha
+esplicitamente avviato e che devono continuare anche se l'app va in
+background: richiede una notifica persistente e visibile (che informa
+l'utente che qualcosa sta consumando risorse), in cambio di una
+"protezione" dalla terminazione anticipata da parte del sistema.
+ 
+**Cosa si e' spostato**: l'intera logica di chiamata al backend +
+salvataggio in Cronologia e' stata spostata da `AdversarialTestFragment`
+a `AdversarialAttackService`, che vive indipendentemente dal ciclo di
+vita della schermata - l'utente puo' navigare altrove, uscire
+dall'app, persino bloccare il telefono, e il servizio continua. Il
+Fragment ora si limita ad avviare il servizio e mostrare un messaggio
+breve; il risultato si trova nella Cronologia attacchi (o toccando la
+notifica finale), non piu' nella stessa schermata da cui si e' partiti.
+ 

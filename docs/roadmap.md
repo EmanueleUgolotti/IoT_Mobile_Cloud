@@ -304,8 +304,41 @@ creeremo.
     JSON).
     → `backend/robustness/main.py`, `backend/robustness_simba/main.py`,
     `docker/docker-compose.yml` (nuovo servizio + healthcheck)
-  - ⬜ **Sotto-task: azione nell'app mobile** — non ancora iniziato
-    → `android/app/src/main/java/com/manu/myapp/`
+  - ✅ **Sotto-task: azione nell'app mobile** — completato e verificato
+    sul dispositivo dell'utente. Nuova schermata "Adversarial" (quinta
+    scheda nella barra di navigazione): sceglie un'immagine (galleria o
+    Cronologia classificazioni), sceglie l'attacco (Boundary/SimBA),
+    l'attacco gira in un Foreground Service indipendente dalla
+    schermata — l'utente puo' cambiare scheda o uscire del tutto
+    dall'app, con una notifica persistente durante l'esecuzione e una
+    notifica finale con l'esito al termine. Cronologia dedicata degli
+    attacchi (database separato da quello delle classificazioni, dato
+    lo schema diverso: due immagini e due predizioni per voce), con le
+    due immagini (originale/avversaria) toccabili per essere viste
+    ingrandite. Corretto un limite di dimensione immagine mancante
+    (stesso problema di OOM gia' risolto altrove, non ereditato
+    automaticamente dalla nuova schermata) e un timeout lato app troppo
+    breve (5 minuti) rispetto ai tempi reali osservati (fino a 8 minuti
+    per Boundary senza GPU), alzato a 15 minuti.
+    → `android/app/src/main/java/com/manu/myapp/RobustnessApiClient.java`,
+    `android/app/src/main/java/com/manu/myapp/SettingsManager.java`
+    (indirizzo backend configurabile),
+    `android/app/src/main/java/com/manu/myapp/AdversarialAttackService.java`
+    (nuovo, Foreground Service),
+    `android/app/src/main/java/com/manu/myapp/AdversarialHistoryItem.java`,
+    `android/app/src/main/java/com/manu/myapp/AdversarialHistoryDbHelper.java`,
+    `android/app/src/main/java/com/manu/myapp/ImageViewerActivity.java`,
+    `android/app/src/main/java/com/manu/myapp/ImageUtils.java` (riusato),
+    `android/app/src/main/java/com/manu/myapp/ui/AdversarialTestFragment.java`,
+    `android/app/src/main/java/com/manu/myapp/BpaApplication.java`
+    (canale di notifica), `android/app/src/main/AndroidManifest.xml`
+    (permessi Foreground Service/notifiche, registrazione Service e
+    Activity), `android/app/src/main/res/xml/network_security_config.xml`
+    (traffico HTTP non cifrato, necessario per il backend locale di
+    sviluppo), `android/app/src/main/res/layout/fragment_adversarial_test.xml`,
+    `android/app/src/main/res/layout/activity_image_viewer.xml`,
+    `android/app/src/main/res/values/strings.xml` e `values-en/strings.xml`
+    (94 chiavi allineate)`
 - ⬜ **Integrazione componente di robustness nel backend**
   → `backend/robustness/`
 

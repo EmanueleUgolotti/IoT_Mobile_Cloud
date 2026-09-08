@@ -232,13 +232,26 @@ creeremo.
   offloading, coda di retry (task successivi).
   → `esp32/gateway/CMakeLists.txt`, `esp32/gateway/main/CMakeLists.txt`,
   `esp32/gateway/main/main.c`
-- ⬜ **Logica di offloading** (decide se mandare a Mobile o Cloud)
-  → `esp32/gateway/`
-- ⬜ **Invio verso Cloud/Mobile** (via WiFi/HTTP) — si aggancia al backend
-  già pronto
-  → `esp32/gateway/`
-- ⬜ **Coda locale con retry** (se il WiFi cade, non perde i dati, riprova)
-  → `esp32/gateway/`
+- ✅ **Logica di offloading + Invio verso Cloud/Mobile** — priorità al
+  Cloud (più potenza di calcolo), fallback su Mobile se non
+  raggiungibile (controllo rapido su `/health`). Configurazione (WiFi,
+  indirizzi backend, API key) tramite `idf.py menuconfig`, nessuna
+  credenziale scritta nel codice. Payload JSON coerente con
+  `network-design.md`, inoltrato via `esp_http_client` verso
+  `/cloud/ingest` o `/mobile/ingest`.
+  **Verificato end-to-end su hardware reale**, incluso il download
+  dell'immagine vera dal dataset condiviso e la classificazione visibile
+  in Cronologia sull'app — vedi decisions-log per il lungo percorso di
+  debug che ha portato a questo risultato (7 cause distinte trovate e
+  risolte, punti 35-41).
+  → `esp32/gateway/main/main.c`, `esp32/gateway/main/Kconfig.projbuild`,
+  `backend/api/main.py` (nuovo endpoint `/dataset/image`)
+- ✅ **Coda locale con retry** — coda FreeRTOS (capacità 10) + task in
+  background che ogni 30 secondi riprova l'inoltro dei pacchetti falliti,
+  rifacendo da capo la decisione di offloading (non fissata sulla
+  destinazione già fallita). Limite noto e accettato: la coda vive solo
+  in RAM, persa a un riavvio del Gateway.
+  → `esp32/gateway/main/main.c`
 
 ## ESP32 #1 — Acquisition Node
 

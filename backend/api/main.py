@@ -9,7 +9,8 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request, FileResponse
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from pydantic import ValidationError
 

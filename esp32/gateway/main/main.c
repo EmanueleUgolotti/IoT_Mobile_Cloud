@@ -25,6 +25,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/queue.h"
 #include "esp_now.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -41,6 +42,24 @@ static const char *TAG = "BPA_GATEWAY";
 
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
+
+/* ---------- Coda locale di retry ----------
+ * Se l'inoltro fallisce sia verso Cloud sia verso Mobile, il pacchetto
+ * viene messo in questa coda invece di essere perso subito. Un task in
+ * background riprova periodicamente, rifacendo da capo la decisione di
+ * offloading (non si fissa sulla stessa destinazione che era fallita -
+ * se nel frattempo il Cloud torna raggiungibile, ci prova).
+ *
+ * LIMITE NOTO (documentato, non risolto qui): la coda vive solo in RAM,
+ * viene persa se il Gateway si riavvia. Risolverlo richiederebbe
+ * salvarla su flash (NVS), non necessario per lo scopo di questo
+ * progetto - il rischio principale (perdita dati per un riavvio
+ * durante un'interruzione di rete) e' un evento raro nella pratica.
+ */
+#define RETRY_QUEUE_DEPTH 10
+#define RETRY_INTERVAL_MS 30000
+
+static QueueHandle_t s_retry_queue;
 
 /* ---------- Schema del pacchetto ESP-NOW (invariato dal Task 1) ---------- */
 
@@ -271,11 +290,16 @@ static void handle_offloading_and_forward(const esp_now_packet_t *packet) {
     }
 
     if (!sent) {
-        // TODO (task successivo): accodare qui il pacchetto per un retry
-        // successivo, invece di perderlo. Per ora solo un log di avviso.
-        ESP_LOGW(TAG, "Inoltro fallito per entrambe le destinazioni (o Mobile non "
-                      "raggiungibile) - pacchetto '%s' perso. La coda di retry "
-                      "e' un task successivo non ancora implementato.", request_id);
+        if (s_retry_queue != NULL &&
+                xQueueSend(s_retry_queue, packet, 0) == pdTRUE) {
+            ESP_LOGW(TAG, "Inoltro fallito per entrambe le destinazioni - pacchetto "
+                          "'%s' messo in coda per un retry tra %d secondi.",
+                     request_id, RETRY_INTERVAL_MS / 1000);
+        } else {
+            ESP_LOGE(TAG, "Inoltro fallito E coda di retry piena (max %d elementi in "
+                          "attesa) - pacchetto '%s' perso definitivamente.",
+                     RETRY_QUEUE_DEPTH, request_id);
+        }
     }
 
     free(json_payload);
@@ -324,6 +348,40 @@ static void on_esp_now_data_received(const esp_now_recv_info_t *recv_info,
              packet.mode == MODE_REFERENCE ? packet.image_ref : "(captured, non gestito in questo task)");
 
     handle_offloading_and_forward(&packet);
+}
+
+/*
+ * Task in background che svuota periodicamente la coda di retry,
+ * riprovando l'inoltro di ogni pacchetto rimasto in sospeso. Rifa' da
+ * capo l'intera decisione di offloading (non si fissa sulla
+ * destinazione che era fallita in precedenza) - se un pacchetto fallisce
+ * di nuovo, torna semplicemente in coda per il giro successivo (gestito
+ * dalla stessa logica di handle_offloading_and_forward, senza bisogno
+ * di codice duplicato qui).
+ */
+static void retry_task(void *pvParameters) {
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(RETRY_INTERVAL_MS));
+
+        UBaseType_t pending = uxQueueMessagesWaiting(s_retry_queue);
+        if (pending == 0) {
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Retry: %u pacchetti in coda, nuovo tentativo di inoltro...",
+                 (unsigned int)pending);
+
+        // Svuota la coda cosi' com'e' ORA (non quella che si riempie nel
+        // frattempo con nuovi fallimenti durante questo stesso giro di
+        // retry - quelli aspetteranno il giro successivo).
+        for (UBaseType_t i = 0; i < pending; i++) {
+            esp_now_packet_t packet;
+            if (xQueueReceive(s_retry_queue, &packet, 0) != pdTRUE) {
+                break; // coda gia' vuota (non dovrebbe succedere, per sicurezza)
+            }
+            handle_offloading_and_forward(&packet);
+        }
+    }
 }
 
 static void init_esp_now(void) {
@@ -377,6 +435,16 @@ void app_main(void) {
     init_wifi();
     log_own_mac_address();
     init_esp_now();
+
+    s_retry_queue = xQueueCreate(RETRY_QUEUE_DEPTH, sizeof(esp_now_packet_t));
+    if (s_retry_queue == NULL) {
+        ESP_LOGE(TAG, "Impossibile creare la coda di retry - i pacchetti falliti "
+                      "verranno persi invece di essere riprovati.");
+    } else {
+        xTaskCreate(retry_task, "retry_task", 4096, NULL, 5, NULL);
+        ESP_LOGI(TAG, "Coda di retry attiva (capacita' %d, intervallo %d secondi).",
+                 RETRY_QUEUE_DEPTH, RETRY_INTERVAL_MS / 1000);
+    }
 
     ESP_LOGI(TAG, "Gateway pronto. In attesa di pacchetti dall'Acquisition Node.");
 

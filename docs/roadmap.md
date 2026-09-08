@@ -30,6 +30,22 @@ creeremo.
 - ⬜ **Collegamento inferenza → database** — salvare anche il risultato
   della classificazione, non solo i metadati della richiesta
   → `backend/inference/`, modifiche a `backend/database/init.sql`
+- ⬜ **Endpoint di lettura risultati** (es. `GET /cloud/results`) —
+  restituisce l'elenco delle ultime classificazioni fatte dal cloud,
+  stesso principio di `/robustness/attack` ma in lettura. Serve da
+  prerequisito per il prossimo punto (l'app che li mostra).
+  → `backend/api/main.py` (nuovo endpoint)
+
+## App Mobile — Cronologia Cloud
+ 
+- ⬜ **Visualizzazione risultati Cloud nell'app** — l'app chiama il nuovo
+  endpoint di lettura e mostra le classificazioni fatte dal cloud,
+  idealmente integrate nella stessa Cronologia già esistente (fonte
+  "Cloud", accanto a "Mobile" e "Foto locale"), non una sezione separata.
+  Riusa il pattern già collaudato con `RobustnessApiClient` per le
+  chiamate HTTP dall'app verso un servizio backend.
+  → `android/app/src/main/java/com/manu/myapp/` (nuovo client HTTP o
+  estensione di uno esistente, integrazione con `HistoryFragment`/`HistoryDbHelper`)
 
 ## App Mobile
 
@@ -204,8 +220,18 @@ creeremo.
 
 ## ESP32 #2 — Gateway
 
-- ⬜ **Ricezione pacchetti da ESP32 #1** (via ESP-NOW)
-  → `esp32/gateway/`
+- ✅ **Ricezione pacchetti da ESP32 #1** (via ESP-NOW) — progetto ESP-IDF
+  (v5.5.1, target esp32s3) inizializzato: WiFi in modalità stazione
+  (necessaria per attivare il radio ESP-NOW, nessuna connessione a un
+  vero access point richiesta), ESP-NOW come ricevitore, struttura del
+  pacchetto coerente con `network-design.md`, validazione CRC (scarta
+  pacchetti corrotti), log su seriale. Flashato e verificato su
+  hardware reale: si avvia correttamente, stampa il proprio indirizzo
+  MAC (`DC:B4:D9:09:FB:20`, da usare come peer nell'Acquisition Node).
+  Non ancora incluso in questo task: inoltro HTTP, logica di
+  offloading, coda di retry (task successivi).
+  → `esp32/gateway/CMakeLists.txt`, `esp32/gateway/main/CMakeLists.txt`,
+  `esp32/gateway/main/main.c`
 - ⬜ **Logica di offloading** (decide se mandare a Mobile o Cloud)
   → `esp32/gateway/`
 - ⬜ **Invio verso Cloud/Mobile** (via WiFi/HTTP) — si aggancia al backend

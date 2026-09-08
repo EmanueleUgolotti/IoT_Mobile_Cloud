@@ -37,6 +37,8 @@ public class HomeFragment extends Fragment {
     private ProgressBar progressConfidence;
     private TextView textLastResultSource;
     private TextView textTapHint;
+    private View serverStatusDot;
+    private TextView textServerSubtitle;
 
     @Nullable
     @Override
@@ -50,6 +52,8 @@ public class HomeFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         textServerStatus = view.findViewById(R.id.textServerStatus);
+        serverStatusDot = view.findViewById(R.id.serverStatusDot);
+        textServerSubtitle = view.findViewById(R.id.textServerSubtitle);
         lastResultCard = view.findViewById(R.id.lastResultCard);
         textLastResultFileName = view.findViewById(R.id.textLastResultFileName);
         textLastResultLabel = view.findViewById(R.id.textLastResultLabel);
@@ -98,13 +102,37 @@ public class HomeFragment extends Fragment {
 
     private void updateServerStatus() {
         AppState appState = AppState.getInstance();
+
         Boolean running = appState.serverRunning.getValue();
         Integer port = appState.serverPort.getValue();
 
         if (Boolean.TRUE.equals(running) && port != null) {
-            textServerStatus.setText(getString(R.string.home_server_status_running, port));
+
+            // Server attivo
+            textServerStatus.setText(
+                    getString(R.string.home_server_status_running, port)
+            );
+
+            textServerSubtitle.setText(getString(R.string.home_server_ready_subtitle));
+
+            serverStatusDot.setBackgroundResource(R.drawable.bg_status_dot);
+            serverStatusDot.getBackground().setTint(
+                    getResources().getColor(R.color.status_success)
+            );
+
         } else {
-            textServerStatus.setText(getString(R.string.home_server_status_stopped));
+
+            // Server spento
+            textServerStatus.setText(
+                    getString(R.string.home_server_status_stopped)
+            );
+
+            textServerSubtitle.setText(getString(R.string.home_server_stopped_subtitle));
+
+            serverStatusDot.setBackgroundResource(R.drawable.bg_status_dot);
+            serverStatusDot.getBackground().setTint(
+                    getResources().getColor(R.color.status_error)
+            );
         }
     }
 }

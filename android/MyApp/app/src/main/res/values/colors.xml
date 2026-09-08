@@ -1,5 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+
+    <!-- Background -->
+    <color name="background_main">#101114</color>
+    <color name="background_surface">#191B20</color>
+    <color name="background_surface_2">#22252B</color>
+
+    <!-- Forensic accent -->
+    <color name="primary">#9E2346</color>
+    <color name="primary_light">#D94A6A</color>
+    <color name="primary_dark">#701630</color>
+
+    <!-- Text -->
+    <color name="text_primary">#F5F5F5</color>
+    <color name="text_secondary">#A7ABB3</color>
+    <color name="text_disabled">#666970</color>
+
+    <!-- Status -->
+    <color name="status_success">#4ADE80</color>
+    <color name="status_warning">#FBBF24</color>
+    <color name="status_error">#F87171</color>
+
+    <!-- Borders -->
+    <color name="border">#383B42</color>
+    <color name="border_primary">#7D1C39</color>
+
+    <color name="nav_item_selected">#D94A6A</color>
+    <color name="nav_item_unselected">#A7ABB3</color>
+
 </resources>

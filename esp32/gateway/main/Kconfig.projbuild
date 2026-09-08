@@ -1,0 +1,58 @@
+menu "BPA Gateway Configuration"
+
+    config BPA_WIFI_SSID
+        string "Nome rete WiFi (SSID)"
+        default "changeme"
+        help
+            Nome della rete WiFi a cui il Gateway si connette per
+            raggiungere Mobile/Cloud via HTTP. Cambia con "idf.py
+            menuconfig" ogni volta che cambi rete, senza dover
+            modificare il codice sorgente.
+            NOTA: reti pubbliche con portale di accesso via browser
+            (es. WiFi cittadini/regionali) NON funzionano - l'ESP32 non
+            puo' gestire quel tipo di autenticazione. Usa una rete
+            domestica o l'hotspot di un telefono.
+
+    config BPA_WIFI_PASSWORD
+        string "Password rete WiFi"
+        default "changeme"
+
+    config BPA_CLOUD_HOST
+        string "Indirizzo IP del backend Cloud"
+        default "192.168.1.100"
+        help
+            IP del PC/server dove gira "docker compose up" (servizio
+            api, porta 8000 di default).
+
+    config BPA_CLOUD_PORT
+        int "Porta del backend Cloud"
+        default 8000
+
+    config BPA_MOBILE_HOST
+        string "Indirizzo IP del telefono (modalita' Mobile)"
+        default "192.168.1.101"
+        help
+            IP del telefono quando l'app e' in ascolto (porta 8080 di
+            default, vedi Impostazioni dell'app).
+
+    config BPA_MOBILE_PORT
+        int "Porta del telefono"
+        default 8080
+
+    config BPA_API_KEY
+        string "API key (lascia vuoto se AUTH_ENABLED=false sul backend)"
+        default ""
+
+    config BPA_SELFTEST_SEND_DUMMY_PACKET
+        bool "Invia un pacchetto di prova finto all'avvio (test senza Acquisition Node)"
+        default n
+        help
+            Utile per testare la logica di offloading/inoltro HTTP prima
+            che l'Acquisition Node sia disponibile: all'avvio, genera un
+            pacchetto finto identico a uno vero e lo fa passare per lo
+            stesso identico percorso di codice usato per un pacchetto
+            ESP-NOW reale. Disattiva questa opzione quando l'Acquisition
+            Node sara' pronto, per non generare traffico finto insieme
+            a quello vero.
+
+endmenu

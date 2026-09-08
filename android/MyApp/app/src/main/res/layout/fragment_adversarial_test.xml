@@ -1,97 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/background_main">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <Button
             android:id="@+id/buttonAdvHistory"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            android:background="@android:color/transparent"
+            android:textColor="@color/primary_light"
             android:text="@string/adv_view_history" />
 
-        <ImageView
-            android:id="@+id/imageAdvPreview"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:background="#EEEEEE"
-            android:scaleType="centerCrop"
-            android:contentDescription="@string/adv_image_preview_description" />
+        <!-- Immagine di partenza -->
 
-        <Button
-            android:id="@+id/buttonAdvPickImage"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/adv_pick_image" />
-
-        <Button
-            android:id="@+id/buttonAdvPickFromHistory"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/adv_pick_from_history" />
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="20dp"
-            android:background="#DDDDDD" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/adv_section_attack"
-            android:textStyle="bold"
-            android:textSize="14sp" />
-
-        <RadioGroup
-            android:id="@+id/radioGroupAttack"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
-
-            <RadioButton
-                android:id="@+id/radioAttackBoundary"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="@string/adv_attack_boundary" />
-
-            <RadioButton
-                android:id="@+id/radioAttackSimba"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/adv_attack_simba" />
-
-        </RadioGroup>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/adv_max_iter_label"
-            android:textSize="12sp" />
-
-        <EditText
-            android:id="@+id/editMaxIter"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="number"
-            android:hint="@string/adv_max_iter_hint" />
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp"
+            android:gravity="center_horizontal">
 
-        <Button
-            android:id="@+id/buttonRunAttack"
-            android:layout_width="wrap_content"
+            <ImageView
+                android:id="@+id/imageAdvPreview"
+                android:layout_width="180dp"
+                android:layout_height="180dp"
+                android:background="@drawable/bg_history_item"
+                android:scaleType="centerCrop"
+                android:contentDescription="@string/adv_image_preview_description" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="14dp">
+
+                <Button
+                    android:id="@+id/buttonAdvPickImage"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:backgroundTint="@color/primary"
+                    android:textColor="@color/text_primary"
+                    android:text="@string/adv_pick_image" />
+
+                <Button
+                    android:id="@+id/buttonAdvPickFromHistory"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:backgroundTint="@color/background_surface_2"
+                    android:textColor="@color/text_primary"
+                    android:text="@string/adv_pick_from_history" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Configurazione attacco -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="@string/adv_run_attack" />
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/adv_section_attack"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupAttack"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <RadioButton
+                    android:id="@+id/radioAttackBoundary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/adv_attack_boundary" />
+
+                <RadioButton
+                    android:id="@+id/radioAttackSimba"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/adv_attack_simba" />
+
+            </RadioGroup>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/adv_max_iter_label"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/editMaxIter"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_history_item"
+                android:padding="12dp"
+                android:inputType="number"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_disabled"
+                android:hint="@string/adv_max_iter_hint" />
+
+            <Button
+                android:id="@+id/buttonRunAttack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:backgroundTint="@color/primary"
+                android:textColor="@color/text_primary"
+                android:text="@string/adv_run_attack" />
+
+        </LinearLayout>
+
+        <!-- Stato / messaggi -->
 
         <LinearLayout
             android:id="@+id/layoutAdvProgress"
@@ -99,17 +150,19 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:visibility="gone">
 
             <ProgressBar
                 android:layout_width="24dp"
-                android:layout_height="24dp" />
+                android:layout_height="24dp"
+                android:indeterminateTint="@color/primary_light" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
+                android:textColor="@color/text_secondary"
                 android:text="@string/adv_running" />
 
         </LinearLayout>
@@ -118,37 +171,38 @@
             android:id="@+id/textAdvAttackStarted"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="#2E7D32"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/status_success"
             android:visibility="gone" />
 
         <TextView
             android:id="@+id/textAdvError"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="#C62828"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/status_error"
             android:visibility="gone" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="20dp"
-            android:background="#DDDDDD" />
+        <!-- Risultato -->
 
         <LinearLayout
             android:id="@+id/layoutAdvResult"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_result_card"
             android:orientation="vertical"
+            android:padding="18dp"
             android:visibility="gone">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/adv_section_result"
+                android:textColor="@color/text_secondary"
                 android:textStyle="bold"
-                android:textSize="14sp" />
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
             <TextView
                 android:id="@+id/textAdvOutcome"
@@ -162,7 +216,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="12dp">
+                android:layout_marginTop="14dp">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -175,13 +229,15 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/adv_original_label"
+                        android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
 
                     <ImageView
                         android:id="@+id/imageAdvOriginal"
                         android:layout_width="140dp"
                         android:layout_height="140dp"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@color/background_surface_2"
                         android:scaleType="centerCrop"
                         android:clickable="true"
                         android:focusable="true"
@@ -192,8 +248,10 @@
                         android:id="@+id/textAdvOriginalLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textSize="13sp" />
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
 
                 </LinearLayout>
 
@@ -207,13 +265,16 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/adv_adversarial_label" />
+                        android:text="@string/adv_adversarial_label"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
 
                     <ImageView
                         android:id="@+id/imageAdvPerturbed"
                         android:layout_width="140dp"
                         android:layout_height="140dp"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="6dp"
+                        android:background="@color/background_surface_2"
                         android:scaleType="centerCrop"
                         android:clickable="true"
                         android:focusable="true"
@@ -224,8 +285,10 @@
                         android:id="@+id/textAdvAdversarialLabel"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textSize="13sp" />
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/primary_light"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
 
                 </LinearLayout>
 
@@ -234,32 +297,36 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="22dp"
                 android:text="@string/adv_section_probabilities_original"
+                android:textColor="@color/text_secondary"
                 android:textStyle="bold"
-                android:textSize="13sp" />
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
             <LinearLayout
                 android:id="@+id/containerProbsOriginal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="18dp"
                 android:text="@string/adv_section_probabilities_adversarial"
+                android:textColor="@color/text_secondary"
                 android:textStyle="bold"
-                android:textSize="13sp" />
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
             <LinearLayout
                 android:id="@+id/containerProbsAdversarial"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginTop="8dp" />
+                android:layout_marginTop="10dp" />
 
         </LinearLayout>
 

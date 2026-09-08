@@ -25,6 +25,9 @@ public class SettingsManager {
     public static final String LANGUAGE_IT = "it";
     public static final String LANGUAGE_EN = "en";
 
+    private static final String KEY_CLOUD_API_URL = "cloud_api_url";
+    public static final String DEFAULT_CLOUD_API_URL = "http://192.168.1.100:8000";
+
     public static int getPort(Context context) {
         return getPrefs(context).getInt(KEY_PORT, DEFAULT_PORT);
     }
@@ -59,5 +62,13 @@ public class SettingsManager {
 
     private static SharedPreferences getPrefs(Context context) {
         return context.getSharedPreferences(PREFS_NAME, 0);
+    }
+
+    public static String getCloudApiUrl(Context context) {
+        return getPrefs(context).getString(KEY_CLOUD_API_URL, DEFAULT_CLOUD_API_URL);
+    }
+
+    public static void setCloudApiUrl(Context context, String url) {
+        getPrefs(context).edit().putString(KEY_CLOUD_API_URL, url).apply();
     }
 }

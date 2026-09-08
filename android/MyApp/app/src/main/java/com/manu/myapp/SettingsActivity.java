@@ -15,8 +15,10 @@ import androidx.core.os.LocaleListCompat;
 /**
  * Schermata Impostazioni: porta del server (effettiva al prossimo
  * riavvio dell'app), tema chiaro/scuro/sistema (applicato subito),
- * lingua italiano/inglese (applicata subito - le traduzioni inglesi
- * complete arrivano in un task dedicato successivo).
+ * lingua italiano/inglese (applicata subito), indirizzo del backend
+ * Cloud "api" (per scaricare le immagini in modalita' reference) e
+ * del backend "robustness" (per gli attacchi adversarial) - due
+ * servizi distinti, indirizzi configurabili separatamente.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -24,6 +26,7 @@ public class SettingsActivity extends AppCompatActivity {
     private RadioGroup radioGroupTheme;
     private RadioGroup radioGroupLanguage;
     private EditText editRobustnessUrl;
+    private EditText editCloudApiUrl;
     private TextView textSettingsSaved;
 
     @Override
@@ -43,6 +46,7 @@ public class SettingsActivity extends AppCompatActivity {
         radioGroupTheme = findViewById(R.id.radioGroupTheme);
         radioGroupLanguage = findViewById(R.id.radioGroupLanguage);
         editRobustnessUrl = findViewById(R.id.editRobustnessUrl);
+        editCloudApiUrl = findViewById(R.id.editCloudApiUrl);
         textSettingsSaved = findViewById(R.id.textSettingsSaved);
         Button buttonSave = findViewById(R.id.buttonSaveSettings);
 
@@ -71,6 +75,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         editRobustnessUrl.setText(SettingsManager.getRobustnessUrl(this));
+        editCloudApiUrl.setText(SettingsManager.getCloudApiUrl(this));
     }
 
     private void saveSettings() {
@@ -111,6 +116,13 @@ public class SettingsActivity extends AppCompatActivity {
         String robustnessUrl = editRobustnessUrl.getText().toString().trim();
         if (!robustnessUrl.isEmpty()) {
             SettingsManager.setRobustnessUrl(this, robustnessUrl);
+        }
+
+        // Indirizzo backend Cloud (api) - usato per scaricare immagini
+        // in modalita' reference
+        String cloudApiUrl = editCloudApiUrl.getText().toString().trim();
+        if (!cloudApiUrl.isEmpty()) {
+            SettingsManager.setCloudApiUrl(this, cloudApiUrl);
         }
 
         textSettingsSaved.setVisibility(android.view.View.VISIBLE);

@@ -2,14 +2,19 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background_main"
     android:orientation="vertical">
 
     <EditText
         android:id="@+id/editSearch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="12dp"
+        android:layout_margin="16dp"
+        android:padding="14dp"
+        android:background="@drawable/bg_history_item"
         android:hint="@string/history_search_hint"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
         android:inputType="text"
         android:maxLines="1" />
 
@@ -18,6 +23,6 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="8dp" />
+        android:paddingHorizontal="16dp" />
 
 </LinearLayout>

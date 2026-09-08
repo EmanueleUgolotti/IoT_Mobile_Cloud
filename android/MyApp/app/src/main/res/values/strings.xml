@@ -9,6 +9,10 @@
     <string name="action_settings">Impostazioni</string>
 
     <!-- Home -->
+    <string name="home_title">Analisi Macchie di Sangue</string>
+    <string name="home_subtitle">IA Forense</string>
+    <string name="home_server_ready_subtitle">Pronto a ricevere acquisizioni</string>
+    <string name="home_server_stopped_subtitle">Server non in ascolto</string>
     <string name="home_section_server">Stato server</string>
     <string name="home_server_status_placeholder">In attesa…</string>
     <string name="home_server_status_running">In ascolto sulla porta %1$d</string>
@@ -18,6 +22,7 @@
     <string name="home_confidence_format">Confidenza: %1$d%%</string>
     <string name="home_source_format">Fonte: %1$s — ore %2$s</string>
     <string name="home_tap_for_details">Tocca per vedere immagine e dettagli</string>
+
 
     <!-- Dettaglio risultato -->
     <string name="detail_title">Dettaglio risultato</string>
@@ -113,5 +118,10 @@
     <string name="adv_notification_fail_title">Attacco non riuscito</string>
     <string name="adv_notification_error_title">Errore nell\'attacco</string>
     <string name="adv_notification_result_text">Attacco %1$s completato — apri la Cronologia attacchi per vedere il risultato</string>
+
+    <!-- Server cloud -->
+    <string name="settings_section_cloud_api">Server Cloud (download immagini)</string>
+    <string name="settings_cloud_api_url_hint">http://192.168.1.100:8000</string>
+    <string name="settings_cloud_api_url_note">Indirizzo del backend che serve le immagini del dataset (porta 8000, diversa da quella degli attacchi).</string>
 
 </resources>

@@ -1,160 +1,249 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/background_main">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="20dp">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbarSettings"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
+            android:background="@color/background_main"
+            app:titleTextColor="@color/text_primary"
             android:layout_marginBottom="16dp" />
 
         <!-- Porta server -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_section_server"
-            android:textStyle="bold"
-            android:textSize="14sp" />
-
-        <EditText
-            android:id="@+id/editServerPort"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="@string/settings_port_hint"
-            android:inputType="number"
-            android:maxLines="1" />
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/settings_port_note"
-            android:textSize="12sp"
-            android:textColor="#888888" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_section_server"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="24dp"
-            android:background="#DDDDDD" />
+            <EditText
+                android:id="@+id/editServerPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_history_item"
+                android:padding="12dp"
+                android:hint="@string/settings_port_hint"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_disabled"
+                android:inputType="number"
+                android:maxLines="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_port_note"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary" />
+
+        </LinearLayout>
 
         <!-- Tema -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_section_theme"
-            android:textStyle="bold"
-            android:textSize="14sp" />
-
-        <RadioGroup
-            android:id="@+id/radioGroupTheme"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
-
-            <RadioButton
-                android:id="@+id/radioThemeSystem"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_theme_system" />
-
-            <RadioButton
-                android:id="@+id/radioThemeLight"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_theme_light" />
-
-            <RadioButton
-                android:id="@+id/radioThemeDark"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_theme_dark" />
-
-        </RadioGroup>
-
-        <View
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="24dp"
-            android:background="#DDDDDD" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_section_theme"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupTheme"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <RadioButton
+                    android:id="@+id/radioThemeSystem"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/settings_theme_system" />
+
+                <RadioButton
+                    android:id="@+id/radioThemeLight"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/settings_theme_light" />
+
+                <RadioButton
+                    android:id="@+id/radioThemeDark"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/settings_theme_dark" />
+
+            </RadioGroup>
+
+        </LinearLayout>
 
         <!-- Lingua -->
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/settings_section_language"
-            android:textStyle="bold"
-            android:textSize="14sp" />
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <RadioGroup
-            android:id="@+id/radioGroupLanguage"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp">
-
-            <RadioButton
-                android:id="@+id/radioLanguageIt"
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_language_it" />
+                android:text="@string/settings_section_language"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
-            <RadioButton
-                android:id="@+id/radioLanguageEn"
+            <RadioGroup
+                android:id="@+id/radioGroupLanguage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_language_en" />
+                android:layout_marginTop="10dp">
 
-        </RadioGroup>
+                <RadioButton
+                    android:id="@+id/radioLanguageIt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/settings_language_it" />
 
-        <View
+                <RadioButton
+                    android:id="@+id/radioLanguageEn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:buttonTint="@color/primary_light"
+                    android:text="@string/settings_language_en" />
+
+            </RadioGroup>
+
+        </LinearLayout>
+
+        <!-- Backend attacchi adversarial -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="24dp"
-            android:background="#DDDDDD" />
-
-        <TextView
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/settings_section_robustness"
-            android:textStyle="bold"
-            android:textSize="14sp" />
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <EditText
-            android:id="@+id/editRobustnessUrl"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_section_robustness"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
+
+            <EditText
+                android:id="@+id/editRobustnessUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_history_item"
+                android:padding="12dp"
+                android:hint="@string/settings_robustness_url_hint"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_disabled"
+                android:inputType="textUri"
+                android:maxLines="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_robustness_url_note"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary" />
+
+        </LinearLayout>
+
+        <!-- Backend Cloud (download immagini in modalita' reference) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="@string/settings_robustness_url_hint"
-            android:inputType="textUri"
-            android:maxLines="1" />
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/settings_robustness_url_note"
-            android:textSize="12sp"
-            android:textColor="#888888" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_section_cloud_api"
+                android:textColor="@color/text_secondary"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:letterSpacing="0.08" />
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginVertical="24dp"
-            android:background="#DDDDDD" />
+            <EditText
+                android:id="@+id/editCloudApiUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_history_item"
+                android:padding="12dp"
+                android:hint="@string/settings_cloud_api_url_hint"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_disabled"
+                android:inputType="textUri"
+                android:maxLines="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_cloud_api_url_note"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary" />
+
+        </LinearLayout>
 
         <Button
             android:id="@+id/buttonSaveSettings"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/text_primary"
             android:text="@string/settings_save" />
 
         <TextView
@@ -163,7 +252,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/settings_saved_confirmation"
-            android:textColor="#2E7D32"
+            android:textColor="@color/status_success"
             android:visibility="gone" />
 
     </LinearLayout>

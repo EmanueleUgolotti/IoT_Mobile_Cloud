@@ -9,7 +9,8 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request, FileResponse
+
 from pydantic import ValidationError
 
 import db
@@ -86,3 +87,19 @@ def _handle_captured(body: dict) -> IngestResponse:
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.get("/dataset/image")
+async def get_dataset_image(dataset_id: str, image_ref: str):
+    """
+    Serve il file immagine vero, dato il riferimento e il dataset.
+    Usato dall'app mobile per scaricare l'immagine quando riceve una
+    richiesta in modalita' 'reference' dal Gateway (che manda solo il
+    nome del file, non i byte).
+    """
+    image_path = DATASET_PATH / dataset_id / image_ref
+    if not image_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"image_ref '{image_ref}' not found in dataset '{dataset_id}'",
+        )
+    return FileResponse(image_path)

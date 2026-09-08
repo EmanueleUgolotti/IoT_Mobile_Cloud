@@ -2,52 +2,65 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background_main"
     android:orientation="vertical"
-    android:padding="24dp">
+    android:padding="20dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/profile_section_name"
-        android:textStyle="bold"
-        android:textSize="14sp" />
-
-    <EditText
-        android:id="@+id/editProfileName"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:hint="@string/profile_name_hint"
-        android:inputType="textPersonName"
-        android:maxLines="1" />
+        android:background="@drawable/bg_forensic_card"
+        android:orientation="vertical"
+        android:padding="18dp">
 
-    <Button
-        android:id="@+id/buttonSaveProfile"
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/profile_section_name"
+            android:textColor="@color/text_secondary"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:letterSpacing="0.08" />
+
+        <EditText
+            android:id="@+id/editProfileName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_history_item"
+            android:padding="12dp"
+            android:hint="@string/profile_name_hint"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_disabled"
+            android:inputType="textPersonName"
+            android:maxLines="1" />
+
+        <Button
+            android:id="@+id/buttonSaveProfile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/text_primary"
+            android:text="@string/profile_save" />
+
+        <TextView
+            android:id="@+id/textProfileSaved"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/profile_saved_confirmation"
+            android:textColor="@color/status_success"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/profile_save" />
-
-    <TextView
-        android:id="@+id/textProfileSaved"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="@string/profile_saved_confirmation"
-        android:textColor="#2E7D32"
-        android:visibility="gone" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginVertical="24dp"
-        android:background="#DDDDDD" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
         android:text="@string/profile_note"
         android:textSize="12sp"
-        android:textColor="#888888" />
+        android:textColor="@color/text_secondary" />
 
 </LinearLayout>

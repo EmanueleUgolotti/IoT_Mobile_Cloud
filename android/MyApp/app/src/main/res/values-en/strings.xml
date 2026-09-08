@@ -9,6 +9,10 @@
     <string name="action_settings">Settings</string>
 
     <!-- Home -->
+    <string name="home_title">Bloodstain Analysis</string>
+    <string name="home_subtitle">Forensic AI</string>
+    <string name="home_server_ready_subtitle">Ready to receive acquisitions</string>
+    <string name="home_server_stopped_subtitle">Server is not listening</string>
     <string name="home_section_server">Server status</string>
     <string name="home_server_status_placeholder">Waiting…</string>
     <string name="home_server_status_running">Listening on port %1$d</string>
@@ -113,5 +117,10 @@
     <string name="adv_notification_fail_title">Attack failed</string>
     <string name="adv_notification_error_title">Attack error</string>
     <string name="adv_notification_result_text">%1$s attack completed — open Attack history to see the result</string>
+
+    <!-- Cloud server -->
+    <string name="settings_section_cloud_api">Cloud server (image download)</string>
+    <string name="settings_cloud_api_url_hint">http://192.168.1.100:8000</string>
+    <string name="settings_cloud_api_url_note">Address of the backend that serves dataset images (port 8000, different from the attacks one).</string>
 
 </resources>

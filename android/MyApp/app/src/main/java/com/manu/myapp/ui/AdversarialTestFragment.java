@@ -401,7 +401,8 @@ public class AdversarialTestFragment extends Fragment {
         textOutcome.setText(item.success
                 ? getString(R.string.adv_outcome_success)
                 : getString(R.string.adv_outcome_fail));
-        textOutcome.setTextColor(item.success ? 0xFFC62828 : 0xFF2E7D32);
+        textOutcome.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(),
+                item.success ? R.color.status_error : R.color.status_success));
 
         imageOriginal.setImageBitmap(original);
         textOriginalLabel.setText(item.predictionOriginal);

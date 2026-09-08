@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
         if (navHostFragment != null) {
             navController = navHostFragment.getNavController();
             BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
+            bottomNav.setItemActiveIndicatorEnabled(false);
             NavigationUI.setupWithNavController(bottomNav, navController);
             NavigationUI.setupActionBarWithNavController(this, navController);
         }
@@ -100,8 +101,9 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Gestisce un'acquisizione ricevuta dal gateway.
      * mode "captured": l'immagine e' gia' nel payload (base64), classifichiamo subito.
-     * mode "reference": richiede di recuperare l'immagine da uno storage condiviso -
-     *   non ancora implementato (serve un endpoint dedicato lato backend). TODO.
+     * mode "reference": il payload contiene solo un riferimento (nome file +
+     *   dataset) - l'immagine va scaricata dal backend Cloud prima di poter
+     *   classificare (vedi classifyReference).
      */
     private void handleIngest(JSONObject payload) {
         Log.i(TAG, "Ricevuta acquisizione: " + payload.toString());
@@ -111,8 +113,7 @@ public class MainActivity extends AppCompatActivity {
         if ("captured".equals(mode)) {
             classifyCaptured(payload);
         } else if ("reference".equals(mode)) {
-            Log.w(TAG, "Modalita' 'reference' non ancora gestita lato mobile " +
-                    "(richiede un endpoint per recuperare l'immagine dal dataset condiviso).");
+            classifyReference(payload);
         }
     }
 
@@ -165,6 +166,61 @@ public class MainActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             Log.e(TAG, "Errore durante la classificazione", e);
+        }
+    }
+
+    /**
+     * Gestisce la modalita' 'reference': il messaggio contiene solo il
+     * nome del file e il dataset, non i byte dell'immagine - vanno
+     * scaricati dal backend Cloud (endpoint /dataset/image) prima di
+     * poter classificare. Stessa logica di classifyCaptured da quel
+     * punto in poi.
+     */
+    private void classifyReference(JSONObject payload) {
+        if (classifier == null) {
+            Log.e(TAG, "Classificatore non disponibile, impossibile classificare.");
+            return;
+        }
+
+        try {
+            String imageRef = payload.getString("image_ref");
+            String datasetId = payload.getString("dataset_id");
+            String cloudApiUrl = SettingsManager.getCloudApiUrl(this);
+
+            byte[] imageBytes = CloudApiClient.downloadDatasetImage(cloudApiUrl, datasetId, imageRef);
+            Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+
+            if (bitmap == null) {
+                Log.e(TAG, "Impossibile decodificare l'immagine scaricata: " + imageRef);
+                return;
+            }
+
+            bitmap = ImageUtils.capMaxDimension(bitmap);
+
+            Classifier.Result result = classifier.classify(bitmap);
+            Log.i(TAG, "Classificazione (reference '" + imageRef + "'): " + result.predictedLabel +
+                    " (confidenza " + result.confidence + ")");
+
+            long timestamp = System.currentTimeMillis();
+            String imagePath = ImageStorage.save(this, bitmap, imageRef);
+
+            long id = historyDb.insert(imageRef, result.predictedLabel, result.confidence,
+                    result.probabilities, "Mobile", timestamp, imagePath);
+
+            AppState.LastResult lastResult = new AppState.LastResult(
+                    id,
+                    bitmap,
+                    imageRef,
+                    result.predictedLabel,
+                    result.confidence,
+                    result.probabilities,
+                    "Mobile",
+                    timestamp
+            );
+            AppState.getInstance().lastResult.postValue(lastResult);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Errore durante la gestione della modalita' reference", e);
         }
     }
 

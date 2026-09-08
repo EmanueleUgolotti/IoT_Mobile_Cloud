@@ -1,101 +1,208 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/home_section_server"
-        android:textStyle="bold"
-        android:textSize="14sp" />
-
-    <TextView
-        android:id="@+id/textServerStatus"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/home_server_status_placeholder"
-        android:textSize="16sp" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginVertical="24dp"
-        android:background="#DDDDDD" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/home_section_last_result"
-        android:textStyle="bold"
-        android:textSize="14sp" />
+    android:background="@color/background_main"
+    android:fillViewport="true">
 
     <LinearLayout
-        android:id="@+id/lastResultCard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:clickable="true"
-        android:focusable="true"
-        android:background="?attr/selectableItemBackground"
-        android:padding="8dp"
-        android:layout_marginTop="4dp">
+        android:paddingStart="20dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="28dp">
+
+        <!-- HEADER -->
 
         <TextView
-            android:id="@+id/textLastResultFileName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:textColor="#888888"
-            android:visibility="gone" />
+            android:text="@string/home_title"
+            android:textColor="@color/text_primary"
+            android:textSize="27sp"
+            android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/textLastResultLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/home_last_result_placeholder"
-            android:textSize="18sp" />
-
-        <TextView
-            android:id="@+id/textLastResultConfidence"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
+            android:text="@string/home_subtitle"
+            android:textColor="@color/primary_light"
             android:textSize="14sp"
-            android:visibility="gone" />
+            android:textStyle="bold" />
 
-        <ProgressBar
-            android:id="@+id/progressConfidence"
-            style="?android:attr/progressBarStyleHorizontal"
+
+        <!-- SERVER -->
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:max="100"
-            android:visibility="gone" />
+            android:layout_marginTop="30dp"
+            android:background="@drawable/bg_forensic_card"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/home_section_server"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/serverStatusDot"
+                    android:layout_width="9dp"
+                    android:layout_height="9dp"
+                    android:background="@drawable/bg_status_dot" />
+
+                <TextView
+                    android:id="@+id/textServerStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="@string/home_server_status_placeholder"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/textServerSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="19dp"
+                android:layout_marginTop="4dp"
+                android:text="@string/home_server_ready_subtitle"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+
+        <!-- LAST ANALYSIS -->
 
         <TextView
-            android:id="@+id/textLastResultSource"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="30dp"
+            android:text="@string/home_section_last_result"
+            android:textColor="@color/text_secondary"
             android:textSize="12sp"
-            android:textColor="#888888"
-            android:visibility="gone" />
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
 
-        <TextView
-            android:id="@+id/textTapHint"
-            android:layout_width="wrap_content"
+
+        <!-- RESULT CARD -->
+
+        <LinearLayout
+            android:id="@+id/lastResultCard"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/home_tap_for_details"
-            android:textSize="12sp"
-            android:textStyle="italic"
-            android:visibility="gone" />
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_result_card"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <!-- File name -->
+
+            <TextView
+                android:id="@+id/textLastResultFileName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+
+            <!-- Classification label -->
+
+            <TextView
+                android:id="@+id/textLastResultLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="@string/home_last_result_placeholder"
+                android:textColor="@color/primary_light"
+                android:textSize="23sp"
+                android:textStyle="bold" />
+
+
+            <!-- Confidence -->
+
+            <TextView
+                android:id="@+id/textLastResultConfidence"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+
+            <!-- Confidence bar -->
+
+            <ProgressBar
+                android:id="@+id/progressConfidence"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="7dp"
+                android:layout_marginTop="12dp"
+                android:max="100"
+                android:progressTint="@color/primary_light"
+                android:progressBackgroundTint="@color/background_surface_2"
+                android:visibility="gone" />
+
+
+            <!-- Source -->
+
+            <TextView
+                android:id="@+id/textLastResultSource"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+
+            <!-- Hint -->
+
+            <TextView
+                android:id="@+id/textTapHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="@string/home_tap_for_details"
+                android:textColor="@color/primary_light"
+                android:textSize="12sp"
+                android:textStyle="italic"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+
+        <!-- BOTTOM SPACE -->
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="28dp" />
 
     </LinearLayout>
 
-</LinearLayout>
+</ScrollView>

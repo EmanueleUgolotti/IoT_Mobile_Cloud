@@ -24,17 +24,28 @@ creeremo.
   `backend/api/requirements.txt`, `backend/api/Dockerfile`,
   `backend/database/init.sql`, `docker/docker-compose.yml`
   (sintesi: `docs/architecture/backend-api-summary.md`)
-- ⬜ **Servizio di inferenza ML** — la parte che guarda davvero dentro
-  l'immagine e dice che tipo di macchia è (userà i modelli del tirocinio)
-  → `backend/inference/`
-- ⬜ **Collegamento inferenza → database** — salvare anche il risultato
-  della classificazione, non solo i metadati della richiesta
-  → `backend/inference/`, modifiche a `backend/database/init.sql`
-- ⬜ **Endpoint di lettura risultati** (es. `GET /cloud/results`) —
-  restituisce l'elenco delle ultime classificazioni fatte dal cloud,
-  stesso principio di `/robustness/attack` ma in lettura. Serve da
-  prerequisito per il prossimo punto (l'app che li mostra).
-  → `backend/api/main.py` (nuovo endpoint)
+- ✅ **Servizio di inferenza ML** — non un nuovo servizio separato: il
+  backend `api` chiama internamente il servizio `robustness` (che ha
+  già il modello VGG16 caricato in memoria, usato anche per gli
+  attacchi adversarial), tramite il suo endpoint `/robustness/predict`
+  già esistente. Scelta deliberata per evitare di caricare TensorFlow
+  una seconda volta in un container separato (costoso in RAM - vedi
+  problemi di memoria affrontati mesi fa). Se la classificazione
+  fallisce (servizio irraggiungibile), la richiesta resta comunque
+  salvata senza risultato - non fa mai fallire la risposta al Gateway.
+  **Testato e funzionante**: `Hf73.jpg` classificato correttamente come
+  "gun" con confidenza 99.97%, in meno di un secondo.
+  → `backend/api/main.py` (funzione `classify_and_store`)
+- ✅ **Collegamento inferenza → database** — tre nuove colonne
+  (`predicted_label`, `probabilities` JSONB, `classified_at`),
+  aggiornate con una query separata dall'insert iniziale.
+  → `backend/api/db.py` (funzione `update_classification`),
+  `backend/database/init.sql`
+- ✅ **Endpoint di lettura risultati** (`GET /cloud/results`) —
+  restituisce le ultime acquisizioni già classificate, più recenti
+  prima. **Testato e funzionante.**
+  → `backend/api/main.py` (funzione `get_results`),
+  `backend/api/db.py` (funzione `get_recent_results`)
 
 ## App Mobile — Cronologia Cloud
  

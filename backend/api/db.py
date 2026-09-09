@@ -1,8 +1,9 @@
 """
 Accesso al database. Semplice apposta: una funzione di connessione
-e una funzione di insert, nessun ORM.
+e alcune funzioni di insert/update/select, nessun ORM.
 """
 
+import json
 import os
 import psycopg2
 
@@ -59,6 +60,55 @@ def insert_captured(payload: CapturedIngestRequest, image_path: str) -> int:
         payload.retry_attempt,
     )
     return _execute_insert(query, values)
+
+
+def update_classification(acquisition_id: int, predicted_label: str, probabilities: dict) -> None:
+    """
+    Salva il risultato dell'inferenza ML per un'acquisizione gia'
+    inserita. Chiamata separatamente dall'insert iniziale, perche' la
+    classificazione avviene DOPO aver gia' salvato la richiesta - se la
+    classificazione fallisce (es. servizio robustness non raggiungibile),
+    la riga resta comunque salvata, solo senza risultato (colonne NULL).
+    """
+    query = """
+        UPDATE acquisitions
+        SET predicted_label = %s, probabilities = %s, classified_at = now()
+        WHERE id = %s;
+    """
+    values = (predicted_label, json.dumps(probabilities), acquisition_id)
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(query, values)
+    finally:
+        conn.close()
+
+
+def get_recent_results(limit: int = 20) -> list[dict]:
+    """
+    Restituisce le acquisizioni gia' classificate (predicted_label non
+    nullo), piu' recenti prima. Usata dall'endpoint GET /cloud/results.
+    """
+    query = """
+        SELECT id, request_id, mode, image_ref, dataset_id, capture_id,
+               predicted_label, probabilities, received_at, classified_at
+        FROM acquisitions
+        WHERE predicted_label IS NOT NULL
+        ORDER BY received_at DESC
+        LIMIT %s;
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (limit,))
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+    finally:
+        conn.close()
 
 
 def _execute_insert(query: str, values: tuple) -> int:

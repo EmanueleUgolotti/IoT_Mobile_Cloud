@@ -16,6 +16,7 @@ services:
       API_KEY: "changeme"
       DATASET_PATH: /data/dataset
       CAPTURED_IMAGES_PATH: /data/captured
+      ROBUSTNESS_SERVICE_URL: http://robustness:8001
     volumes:
       # Dataset montato dall'esterno: cambiare qui il path per passare
       # da bpa a un altro dataset (es. cifar10), senza rebuild.

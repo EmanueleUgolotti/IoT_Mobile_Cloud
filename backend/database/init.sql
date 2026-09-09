@@ -1,6 +1,3 @@
--- Tabella che memorizza ogni richiesta di ingest ricevuta dal gateway
--- (sia in modalita' 'reference' che 'captured')
-
 CREATE TABLE IF NOT EXISTS acquisitions (
     id             SERIAL PRIMARY KEY,
     request_id     TEXT UNIQUE NOT NULL,
@@ -14,6 +11,10 @@ CREATE TABLE IF NOT EXISTS acquisitions (
 
     capture_id     TEXT,
     image_path     TEXT,
+
+    predicted_label TEXT,
+    probabilities   JSONB,
+    classified_at   TIMESTAMPTZ,
 
     retry_attempt  INTEGER NOT NULL DEFAULT 0,
     received_at    TIMESTAMPTZ NOT NULL DEFAULT now()

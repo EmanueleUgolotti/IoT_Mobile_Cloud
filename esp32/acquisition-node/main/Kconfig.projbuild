@@ -1,0 +1,40 @@
+menu "BPA Acquisition Node Configuration"
+
+    config BPA_WIFI_SSID
+        string "Nome rete WiFi (SSID)"
+        default "changeme"
+        help
+            Deve essere la STESSA rete a cui e' connesso il Gateway
+            (ESP32 #2) - non serve per accedere a Internet da qui, ma
+            ESP-NOW richiede che i due dispositivi siano sullo stesso
+            canale radio, e collegarsi alla stessa rete e' il modo piu'
+            semplice per garantirlo.
+
+    config BPA_WIFI_PASSWORD
+        string "Password rete WiFi"
+        default "changeme"
+
+    config BPA_GATEWAY_MAC_ADDR
+        string "Indirizzo MAC del Gateway (ESP32 #2)"
+        default "DC:B4:D9:09:FB:20"
+        help
+            Stampato dal firmware del Gateway al suo avvio ("Indirizzo
+            MAC di questo Gateway: ..."). Va copiato qui esattamente,
+            con i due punti come separatori.
+
+    config BPA_NODE_ID
+        int "ID di questo nodo"
+        default 1
+        help
+            Deve corrispondere al node_id atteso dal Gateway/backend
+            (finora sempre usato 1 nei test).
+
+    config BPA_SEND_INTERVAL_MS
+        int "Intervallo tra un invio e il successivo (millisecondi)"
+        default 10000
+        help
+            Ogni quanto il nodo manda un nuovo pacchetto 'reference' al
+            Gateway, scegliendo la prossima immagine del dataset a
+            rotazione.
+
+endmenu

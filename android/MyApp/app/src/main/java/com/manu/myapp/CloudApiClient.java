@@ -8,12 +8,15 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
- * Scarica un'immagine dal dataset condiviso sul backend Cloud
- * (backend/api/, endpoint /dataset/image), usato quando l'app riceve
- * un'acquisizione in modalita' 'reference' dal Gateway: il messaggio
- * contiene solo il nome del file, non i byte dell'immagine - vanno
- * scaricati da qui prima di poter classificare.
+ * Client HTTP per il backend Cloud ("api"): scarica immagini dal
+ * dataset condiviso (usato per la modalita' 'reference') e legge le
+ * classificazioni gia' fatte lato server (usato per sincronizzare i
+ * risultati Cloud nella Cronologia dell'app).
  */
 public class CloudApiClient {
 
@@ -34,6 +37,34 @@ public class CloudApiClient {
         String urlString = baseUrl + "/dataset/image?dataset_id=" + encodedDatasetId
                 + "&image_ref=" + encodedImageRef;
 
+        byte[] response = performGetRaw(urlString);
+        return response;
+    }
+
+    /**
+     * Recupera le ultime classificazioni gia' fatte dal backend Cloud
+     * (endpoint GET /cloud/results), usato per sincronizzarle nella
+     * Cronologia locale dell'app.
+     *
+     * @param baseUrl indirizzo del backend api (es. "http://192.168.1.100:8000")
+     * @param limit   numero massimo di risultati da recuperare
+     * @return l'array JSON grezzo dei risultati (ciascuno con request_id,
+     *         mode, image_ref, dataset_id, predicted_label, probabilities, ecc.)
+     * @throws IOException   se la richiesta di rete fallisce
+     * @throws JSONException se la risposta non e' nel formato atteso
+     */
+    public static JSONArray fetchRecentResults(String baseUrl, int limit)
+            throws IOException, JSONException {
+        String urlString = baseUrl + "/cloud/results?limit=" + limit;
+
+        byte[] response = performGetRaw(urlString);
+        String body = new String(response, StandardCharsets.UTF_8);
+
+        JSONObject root = new JSONObject(body);
+        return root.getJSONArray("results");
+    }
+
+    private static byte[] performGetRaw(String urlString) throws IOException {
         URL url = new URL(urlString);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -44,8 +75,7 @@ public class CloudApiClient {
 
             int responseCode = conn.getResponseCode();
             if (responseCode != 200) {
-                throw new IOException("Download fallito (HTTP " + responseCode + ") per "
-                        + datasetId + "/" + imageRef);
+                throw new IOException("Richiesta fallita (HTTP " + responseCode + ") per " + urlString);
             }
 
             try (InputStream input = conn.getInputStream();

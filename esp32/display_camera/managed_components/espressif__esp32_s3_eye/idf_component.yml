@@ -1,0 +1,28 @@
+dependencies:
+  button:
+    public: true
+    version: ^4
+  esp32-camera:
+    public: true
+    version: ^2.0.13
+  esp_codec_dev:
+    public: true
+    version: ~1.5
+  espressif/esp_lvgl_port:
+    public: true
+    version: ^2
+  idf: '>=5.4'
+  qma6100p:
+    public: true
+    version: ^2
+description: Board Support Package (BSP) for ESP32-S3-EYE
+repository: git://github.com/espressif/esp-bsp.git
+repository_info:
+  commit_sha: 1bd663be5317bfc4457335011889eec5db33098d
+  path: bsp/esp32_s3_eye
+tags:
+- bsp
+targets:
+- esp32s3
+url: https://github.com/espressif/esp-bsp/tree/master/bsp/esp32_s3_eye
+version: 5.0.2

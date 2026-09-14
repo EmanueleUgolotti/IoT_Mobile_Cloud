@@ -35,6 +35,28 @@ menu "BPA Acquisition Node Configuration"
         help
             Ogni quanto il nodo manda un nuovo pacchetto 'reference' al
             Gateway, scegliendo la prossima immagine del dataset a
-            rotazione.
+            rotazione (a meno che BPA_SINGLE_IMAGE_REF non sia
+            impostato, vedi sotto).
+
+    config BPA_SINGLE_IMAGE_REF
+        string "Manda sempre solo questa immagine (lascia vuoto per la rotazione)"
+        default ""
+        help
+            Se vuoto (default), il nodo manda a rotazione tutte le
+            immagini della lista DATASET_IMAGES in main.c. Se qui
+            scrivi un nome file (es. "Hf73.jpg"), il nodo mandera'
+            SEMPRE e SOLO quella, ignorando la rotazione - utile per
+            test mirati su un'unica immagine.
+
+    config BPA_AUTO_SEND_ENABLED_AT_BOOT
+        bool "Modalita' automatica attiva gia' all'avvio"
+        default y
+        help
+            Se attivo (default), il nodo manda automaticamente un
+            pacchetto ogni BPA_SEND_INTERVAL_MS fin dall'avvio - stesso
+            comportamento di prima. Se disattivo, la modalita'
+            automatica parte spenta, e va accesa manualmente con il
+            pulsante MENU (vedi sotto) - lo scatto manuale con PLAY resta
+            comunque sempre disponibile in entrambi i casi.
 
 endmenu

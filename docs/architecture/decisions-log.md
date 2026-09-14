@@ -351,4 +351,30 @@ dall'app, persino bloccare il telefono, e il servizio continua. Il
 Fragment ora si limita ad avviare il servizio e mostrare un messaggio
 breve; il risultato si trova nella Cronologia attacchi (o toccando la
 notifica finale), non piu' nella stessa schermata da cui si e' partiti.
+
+## 32. Perché il Cloud non ha un servizio ML separato
  
+Per completare l'inferenza ML lato Cloud (task rimasto aperto da
+mesi), la scelta e' stata riusare il servizio `robustness` gia'
+esistente (che ha il modello VGG16 caricato in memoria per gli attacchi
+adversarial) invece di crearne uno nuovo dedicato. `robustness` esponeva
+gia' un endpoint pensato per questo esatto scopo,
+`/robustness/predict` - originariamente creato per servire il servizio
+SimBA (che ha bisogno di interrogare il modello senza caricare
+TensorFlow nel proprio container PyTorch), ma altrettanto adatto a
+essere chiamato dal backend `api`.
+ 
+**Perche' non un servizio separato**: caricare TensorFlow e il modello
+VGG16 una seconda volta in un container a se' avrebbe raddoppiato il
+consumo di RAM per lo stesso identico modello - uno spreco evitabile,
+specialmente dato che la macchina di sviluppo ha gia' mostrato limiti
+di memoria in passato (vedi i problemi di blocco PC con Docker+Chrome
+descritti in una sezione precedente).
+ 
+La classificazione (`classify_and_store`) e' intenzionalmente
+"a parte" dal salvataggio della richiesta: se il servizio robustness
+non e' raggiungibile, la riga resta comunque salvata nel database
+(senza risultato), e la risposta al Gateway non viene mai bloccata da
+un problema di classificazione - coerente con lo stesso principio di
+tolleranza ai guasti gia' applicato altrove nel progetto (es. l'app che
+risponde comunque 200 OK anche se la classificazione locale fallisce).

@@ -1,0 +1,11 @@
+## IDF Component Manager Manifest File
+dependencies:
+  ## Required IDF version
+  idf:
+    version: '>=4.1.0'
+  # Fotocamera + display della scheda ESP32-S3-EYE - versione bloccata
+  # esplicitamente (vedi decisions-log per il perche': versioni piu'
+  # recenti richiedono un driver fotocamera diverso, non compatibile
+  # con esp_camera.h usato qui).
+  esp32_s3_eye:
+    version: "=5.0.2"

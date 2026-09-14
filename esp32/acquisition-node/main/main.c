@@ -5,8 +5,7 @@
  * 'reference' (un riferimento a un'immagine gia' presente nel dataset
  * condiviso, non i byte veri) - coerente con la roadmap, che segna la
  * modalita' 'captured' (foto vera dalla fotocamera, con relativa
- * frammentazione ESP-NOW) come task separato, successivo, che
- * richiedera' l'hardware della fotocamera (non ancora disponibile).
+ * frammentazione ESP-NOW) come task separato, successivo.
  *
  * Il nodo si limita a scegliere, a rotazione, un nome file dalla stessa
  * lista che esiste davvero nel dataset condiviso (data/dataset/bpa_v1/
@@ -33,7 +32,11 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_rom_crc.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
+#include "bsp/esp-bsp.h"
+#include "esp_camera.h"
+#include "iot_button.h"
 
 static const char *TAG = "BPA_ACQUISITION_NODE";
 
@@ -84,6 +87,132 @@ static const char *DATASET_IMAGES[] = {
 };
 #define DATASET_IMAGES_COUNT (sizeof(DATASET_IMAGES) / sizeof(DATASET_IMAGES[0]))
 
+/* ---------- Fotocamera + display (anteprima dal vivo + scatto su richiesta) ----------
+ * Inizializzazione identica al progetto di prova "display_camera"
+ * (esempio ufficiale Espressif per questa scheda, gia' verificato
+ * funzionante) - qui riusata cosi' com'era, non reinventata.
+ *
+ * NOTA IMPORTANTE SU QUESTO PASSAGGIO: la fotocamera scatta davvero
+ * quando premi PLAY, ma il risultato per ora viene solo LOGGATO (byte
+ * catturati), non ancora mandato via ESP-NOW - l'invio richiede la
+ * frammentazione (un pacchetto ESP-NOW non contiene una foto intera),
+ * che e' il prossimo pezzo di lavoro, non ancora costruito.
+ */
+
+static uint8_t *s_cam_buff;
+static lv_obj_t *s_camera_canvas;
+
+static void init_camera_and_display(void) {
+    bsp_i2c_init();
+    bsp_display_start();
+    bsp_display_backlight_on();
+
+    const camera_config_t camera_config = BSP_CAMERA_DEFAULT_CONFIG;
+    esp_err_t err = esp_camera_init(&camera_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Inizializzazione fotocamera fallita: %s", esp_err_to_name(err));
+        return;
+    }
+
+    sensor_t *sensor = esp_camera_sensor_get();
+    sensor->set_vflip(sensor, BSP_CAMERA_VFLIP);
+    sensor->set_hmirror(sensor, BSP_CAMERA_HMIRROR);
+    ESP_LOGI(TAG, "Fotocamera inizializzata.");
+
+    uint32_t cam_buff_size = BSP_LCD_H_RES * BSP_LCD_V_RES * 2;
+    s_cam_buff = heap_caps_malloc(cam_buff_size, MALLOC_CAP_SPIRAM);
+    assert(s_cam_buff);
+
+    bsp_display_lock(0);
+    s_camera_canvas = lv_canvas_create(lv_scr_act());
+    lv_canvas_set_buffer(s_camera_canvas, s_cam_buff, BSP_LCD_H_RES, BSP_LCD_V_RES, LV_COLOR_FORMAT_RGB565);
+    lv_obj_center(s_camera_canvas);
+    bsp_display_unlock();
+}
+
+/* Task dedicato: aggiorna continuamente l'anteprima sul display, il
+ * piu' velocemente possibile, per un'immagine fluida. */
+static void camera_preview_task(void *pvParameters) {
+    uint32_t cam_buff_size = BSP_LCD_H_RES * BSP_LCD_V_RES * 2;
+
+    for (;;) {
+        camera_fb_t *pic = esp_camera_fb_get();
+        if (pic) {
+            bsp_display_lock(0);
+            memcpy(s_cam_buff, pic->buf, cam_buff_size);
+            esp_camera_fb_return(pic);
+            if (BSP_LCD_BIGENDIAN) {
+                lv_draw_sw_rgb565_swap(s_cam_buff, cam_buff_size);
+            }
+            lv_obj_invalidate(s_camera_canvas);
+            bsp_display_unlock();
+        } else {
+            ESP_LOGW(TAG, "Anteprima: cattura fotogramma fallita.");
+        }
+        vTaskDelay(1);
+    }
+}
+
+/*
+ * Scatta una foto vera su richiesta (pulsante PLAY). Per ora si limita
+ * a confermare la cattura via log - l'invio via ESP-NOW e' il prossimo
+ * pezzo di lavoro (richiede la frammentazione, non ancora costruita).
+ */
+static void capture_photo_on_demand(void) {
+    camera_fb_t *pic = esp_camera_fb_get();
+    if (!pic) {
+        ESP_LOGW(TAG, "Scatto richiesto, ma la cattura e' fallita.");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Foto scattata: %zu byte (formato %d, %dx%d) - invio via ESP-NOW "
+                  "non ancora implementato (richiede la frammentazione, prossimo passo).",
+             pic->len, pic->format, pic->width, pic->height);
+
+    esp_camera_fb_return(pic);
+}
+
+/* ---------- Pulsanti (API ufficiale del pacchetto della scheda) ----------
+ * NOTA IMPORTANTE: qui NON leggiamo l'ADC a mano (come nel primo
+ * tentativo) - quel codice andava in conflitto con la gestione interna
+ * che il pacchetto ufficiale della scheda fa dello stesso canale ADC
+ * condiviso (i quattro pulsanti MENU/PLAY/UP/DOWN sono sullo stesso
+ * pin), causando un crash quando fotocamera e pulsanti giravano
+ * insieme. La soluzione corretta e' usare l'API ufficiale
+ * (bsp_iot_button_create + iot_button_register_cb), che gestisce
+ * questa risorsa condivisa senza conflitti - stesso principio gia'
+ * seguito per fotocamera e display.
+ *
+ * Uso in questo progetto: PLAY = scatta la fotocamera vera, subito
+ * (sempre disponibile); MENU = accende/spegne la modalita' automatica
+ * a intervalli (invio di riferimenti dal dataset).
+ */
+
+static volatile bool s_auto_mode_enabled = false;
+
+static void on_play_button_pressed(void *button_handle, void *usr_data) {
+    ESP_LOGI(TAG, "Pulsante PLAY premuto - scatto con la fotocamera vera.");
+    capture_photo_on_demand();
+}
+
+static void on_menu_button_pressed(void *button_handle, void *usr_data) {
+    s_auto_mode_enabled = !s_auto_mode_enabled;
+    ESP_LOGI(TAG, "Pulsante MENU premuto - modalita' automatica ora %s.",
+             s_auto_mode_enabled ? "ATTIVA" : "spenta");
+}
+
+static void init_buttons(void) {
+    button_handle_t button_handles[BSP_BUTTON_NUM] = {NULL};
+    ESP_ERROR_CHECK(bsp_iot_button_create(button_handles, NULL, BSP_BUTTON_NUM));
+
+    ESP_ERROR_CHECK(iot_button_register_cb(button_handles[BSP_BUTTON_PLAY], BUTTON_PRESS_DOWN,
+                                            NULL, on_play_button_pressed, NULL));
+    ESP_ERROR_CHECK(iot_button_register_cb(button_handles[BSP_BUTTON_MENU], BUTTON_PRESS_DOWN,
+                                            NULL, on_menu_button_pressed, NULL));
+
+    ESP_LOGI(TAG, "Pulsanti inizializzati (API ufficiale della scheda).");
+}
+
 /* ---------- Connessione WiFi (stesso schema del Gateway) ---------- */
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
@@ -124,6 +253,12 @@ static void init_wifi(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    // Disattiva il risparmio energetico del radio WiFi - vedi la stessa
+    // identica nota nel firmware del Gateway (main.c) per il perche':
+    // senza questo, ESP-NOW perde pacchetti a intermittenza per via del
+    // "modem sleep" periodico del radio.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     ESP_LOGI(TAG, "Connessione a rete WiFi '%s' in corso "
                   "(stessa rete del Gateway, necessaria per ESP-NOW)...", CONFIG_BPA_WIFI_SSID);
@@ -196,14 +331,14 @@ static void init_esp_now(void) {
 
 /* ---------- Invio ciclico dei pacchetti 'reference' ---------- */
 
-static void send_next_reference_packet(uint32_t seq_num, size_t image_index) {
+static void send_reference_packet(uint32_t seq_num, const char *image_ref) {
     esp_now_packet_t packet = {
         .node_id = (uint8_t)CONFIG_BPA_NODE_ID,
         .seq_num = seq_num,
         .mode = MODE_REFERENCE,
         .timestamp = 0, // non affidabile senza RTC/NTP - vedi stessa nota nel Gateway
     };
-    strncpy(packet.image_ref, DATASET_IMAGES[image_index], sizeof(packet.image_ref) - 1);
+    strncpy(packet.image_ref, image_ref, sizeof(packet.image_ref) - 1);
     packet.crc = compute_packet_crc(&packet);
 
     ESP_LOGI(TAG, "Invio pacchetto #%lu - image_ref='%s'",
@@ -215,17 +350,41 @@ static void send_next_reference_packet(uint32_t seq_num, size_t image_index) {
     }
 }
 
+/*
+ * Gestisce SOLO la modalita' automatica a intervalli (invio di
+ * riferimenti dal dataset) - lo scatto manuale (PLAY) e l'accensione/
+ * spegnimento della modalita' automatica (MENU) sono ora gestiti dalle
+ * callback dei pulsanti sopra, non da un polling qui dentro.
+ */
 static void acquisition_loop_task(void *pvParameters) {
     uint32_t seq_num = 0;
     size_t image_index = 0;
 
+    // Se configurata, questa singola immagine viene mandata sempre,
+    // ignorando la rotazione - vedi Kconfig.projbuild.
+    bool single_image_mode = strlen(CONFIG_BPA_SINGLE_IMAGE_REF) > 0;
+
+    s_auto_mode_enabled = CONFIG_BPA_AUTO_SEND_ENABLED_AT_BOOT;
+    ESP_LOGI(TAG, "Modalita' automatica all'avvio: %s", s_auto_mode_enabled ? "ATTIVA" : "spenta");
+
+    int64_t last_auto_send_ms = 0;
+
     for (;;) {
-        send_next_reference_packet(seq_num, image_index);
+        if (s_auto_mode_enabled) {
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            if (now_ms - last_auto_send_ms >= CONFIG_BPA_SEND_INTERVAL_MS) {
+                if (single_image_mode) {
+                    send_reference_packet(seq_num, CONFIG_BPA_SINGLE_IMAGE_REF);
+                } else {
+                    send_reference_packet(seq_num, DATASET_IMAGES[image_index]);
+                    image_index = (image_index + 1) % DATASET_IMAGES_COUNT;
+                }
+                seq_num++;
+                last_auto_send_ms = now_ms;
+            }
+        }
 
-        seq_num++;
-        image_index = (image_index + 1) % DATASET_IMAGES_COUNT;
-
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_BPA_SEND_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }
 
@@ -239,12 +398,20 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
+    init_camera_and_display();
     init_wifi();
     init_esp_now();
+    // TEMPORANEAMENTE DISATTIVATO: il componente ufficiale dei pulsanti
+    // (che legge lo stesso canale ADC condiviso) va in crash quando
+    // gira insieme alla fotocamera - conflitto piu' profondo di quanto
+    // pensassimo, da investigare separatamente. Per ora isoliamo il
+    // test di fotocamera+display, senza pulsanti.
+    // init_buttons();
 
     ESP_LOGI(TAG, "Acquisition Node pronto - invio un pacchetto ogni %d ms, "
                   "%d immagini in rotazione.",
              CONFIG_BPA_SEND_INTERVAL_MS, DATASET_IMAGES_COUNT);
 
+    xTaskCreate(camera_preview_task, "camera_preview", 4096, NULL, 4, NULL);
     xTaskCreate(acquisition_loop_task, "acquisition_loop", 4096, NULL, 5, NULL);
 }

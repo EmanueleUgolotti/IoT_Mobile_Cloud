@@ -124,4 +124,9 @@
     <string name="settings_cloud_api_url_hint">http://192.168.1.100:8000</string>
     <string name="settings_cloud_api_url_note">Indirizzo del backend che serve le immagini del dataset (porta 8000, diversa da quella degli attacchi).</string>
 
+    <!-- Sincronizzazione cronologia dal Cloud -->
+    <string name="history_sync_cloud_button">Aggiorna dal Cloud</string>
+    <string name="history_sync_cloud_success">%1$d nuove classificazioni sincronizzate dal Cloud</string>
+    <string name="history_sync_cloud_up_to_date">Cronologia già aggiornata</string>
+    <string name="history_sync_cloud_error">Errore durante la sincronizzazione dal Cloud</string>
 </resources>

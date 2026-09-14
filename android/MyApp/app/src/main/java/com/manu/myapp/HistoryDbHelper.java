@@ -82,6 +82,22 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Verifica se esiste gia' una voce con questo nome file e questa
+     * fonte - usato per evitare di duplicare le classificazioni Cloud
+     * gia' sincronizzate in precedenza, se l'utente sincronizza piu'
+     * volte.
+     */
+    public boolean existsWithFileNameAndSource(String fileName, String source) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE, new String[]{COL_ID},
+                COL_FILE_NAME + " = ? AND " + COL_SOURCE + " = ?",
+                new String[]{fileName, source}, null, null, null);
+        boolean exists = cursor.getCount() > 0;
+        cursor.close();
+        return exists;
+    }
+
+    /**
      * Inserisce una nuova classificazione nella cronologia.
      * Va chiamato fuori dal thread principale (es. dal thread del server
      * NanoHTTPD, che non e' il thread UI).

@@ -123,4 +123,9 @@
     <string name="settings_cloud_api_url_hint">http://192.168.1.100:8000</string>
     <string name="settings_cloud_api_url_note">Address of the backend that serves dataset images (port 8000, different from the attacks one).</string>
 
+    <!-- History sync from Cloud -->
+    <string name="history_sync_cloud_button">Sync from Cloud</string>
+    <string name="history_sync_cloud_success">%1$d new classifications synced from Cloud</string>
+    <string name="history_sync_cloud_up_to_date">History already up to date</string>
+    <string name="history_sync_cloud_error">Error syncing from Cloud</string>
 </resources>

@@ -378,3 +378,53 @@ non e' raggiungibile, la riga resta comunque salvata nel database
 un problema di classificazione - coerente con lo stesso principio di
 tolleranza ai guasti gia' applicato altrove nel progetto (es. l'app che
 risponde comunque 200 OK anche se la classificazione locale fallisce).
+
+## 39. Il percorso per far funzionare fotocamera, display e pulsanti insieme
+ 
+Integrare questi tre sistemi nello stesso firmware ha richiesto
+risolvere, in sequenza, diversi problemi - vale la pena ripercorrerli.
+ 
+**1. ESP-IDF troppo vecchia per il driver fotocamera**: la versione
+installata (5.5.1) non supportava il driver DVP necessario per questa
+combinazione scheda/IDF - risolto aggiornando a 5.5.2 (aggiornamento di
+patch, non ha richiesto modifiche ai progetti Gateway/Acquisition Node
+gia' funzionanti).
+ 
+**2. Versione del pacchetto BSP presa "troppo nuova" nonostante il
+blocco**: il gestore dipendenze di ESP-IDF tratta un numero di versione
+scritto da solo (es. `"5.0.2"`) come "compatibile con, o piu' recente",
+non come "esattamente questa" - serve il simbolo `=` esplicito
+(`"=5.0.2"`) per bloccarla davvero. Una versione piu' recente (6.0.0)
+usa un driver fotocamera diverso e incompatibile con `esp_camera.h`.
+ 
+**3. Partizione flash troppo piccola**: il firmware, una volta aggiunto
+tutto (fotocamera, display, LVGL), e' cresciuto oltre lo spazio
+riservato di default (1MB) - risolto passando a una tabella di
+partizioni "large" (circa 1.5MB) tramite `idf.py menuconfig`. Nessun
+rischio per l'hardware (la scheda ha gia' dimostrato di supportare
+questa dimensione, vedi il progetto di prova).
+ 
+**4. PSRAM inizializzata nella modalita' sbagliata**: la scheda ha PSRAM
+"Octal" (8 linee dati), ma la configurazione di `acquisition-node` (mai
+aggiornata da quando il progetto conteneva solo WiFi/ESP-NOW) era
+ancora impostata su "Quad" (4 linee) - la fotocamera falliva ad
+allocare il proprio buffer perche' la PSRAM non veniva nemmeno
+riconosciuta all'avvio (0 byte liberi). Risolto in
+`menuconfig` → Component config → ESP PSRAM → Octal Mode.
+ 
+**5. Conflitto tra pulsanti e fotocamera sullo stesso canale ADC**: i
+quattro pulsanti MENU/PLAY/UP/DOWN della scheda condividono un solo
+pin, letto come segnale analogico (ADC) - creare quei pulsanti (anche
+il pacchetto ufficiale, non solo il tentativo di lettura manuale
+scritto inizialmente) avvia un timer interno che li legge
+periodicamente TUTTI insieme, andando in conflitto con l'uso che la
+fotocamera fa delle risorse hardware condivise, causando un crash
+(`assert failed: adc_oneshot_ll_set_output_bits`). **Soluzione**: il
+pulsante BOOT della scheda e' invece su un pin digitale indipendente,
+senza alcun ADC coinvolto - creando SOLO quel pulsante
+(`iot_button_new_gpio_device`, non la funzione che li crea tutti
+insieme), il conflitto non si presenta per costruzione. Un solo
+pulsante fisico distingue pressione breve (scatta la fotocamera) da
+pressione lunga (accende/spegne la modalita' automatica) - nessun
+bisogno di riconfigurare/riflashare per cambiare comportamento a
+runtime.

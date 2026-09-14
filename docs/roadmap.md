@@ -266,12 +266,25 @@ creeremo.
 
 ## ESP32 #1 — Acquisition Node
 
-- ⬜ **Modalità `reference`** — sceglie un'immagine dal dataset e manda solo
-  il riferimento (richiede solo un ESP32 base, hardware che già hai)
+- ✅ **Modalità `reference`** — sceglie un'immagine dal dataset e manda solo
+  il riferimento. **Testato end-to-end** insieme al Gateway.
   → `esp32/acquisition-node/`
-- ⬜ **Modalità `captured`** — scatta davvero una foto con la webcam e la
-  manda (richiede l'ESP32 con fotocamera)
-  → `esp32/acquisition-node/`
+- ✅ **Fotocamera + display** — OV2640 e LCD della scheda ESP32-S3-EYE
+  integrati nel firmware, riusando il codice del progetto di prova
+  ufficiale `esp32/display_camera/` (verificato isolatamente prima di
+  integrarlo). Anteprima video dal vivo, fluida. Pulsante BOOT: pressione
+  breve scatta una foto vera (per ora solo loggata), pressione lunga
+  accende/spegne la modalità automatica di invio riferimenti - decidibile
+  a runtime, senza riflashare. **Testato e funzionante.**
+  → `esp32/acquisition-node/main.c`, `esp32/display_camera/` (progetto di
+  prova, mantenuto come riferimento/prova che l'hardware funziona
+  isolatamente - vedi decisions-log)
+- ⬜ **Frammentazione ESP-NOW + modalità `captured`** — spezzare una foto
+  vera in più pacchetti ESP-NOW (troppo grande per un pacchetto solo),
+  ricomponibile lato Gateway, poi inoltrabile come modalità `captured`
+  (già gestita dal backend). Include la notifica di un tentativo fallito
+  (pezzi persi) al backend, cosi' l'utente sa che lo scatto va rifatto.
+  → `esp32/acquisition-node/`, `esp32/gateway/`
 
 ## Robustezza / gestione errori (trasversale a più pezzi)
 

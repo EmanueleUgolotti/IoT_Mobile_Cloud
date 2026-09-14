@@ -37,6 +37,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_camera.h"
 #include "iot_button.h"
+#include "button_gpio.h"
 
 static const char *TAG = "BPA_ACQUISITION_NODE";
 
@@ -172,45 +173,56 @@ static void capture_photo_on_demand(void) {
     esp_camera_fb_return(pic);
 }
 
-/* ---------- Pulsanti (API ufficiale del pacchetto della scheda) ----------
- * NOTA IMPORTANTE: qui NON leggiamo l'ADC a mano (come nel primo
- * tentativo) - quel codice andava in conflitto con la gestione interna
- * che il pacchetto ufficiale della scheda fa dello stesso canale ADC
- * condiviso (i quattro pulsanti MENU/PLAY/UP/DOWN sono sullo stesso
- * pin), causando un crash quando fotocamera e pulsanti giravano
- * insieme. La soluzione corretta e' usare l'API ufficiale
- * (bsp_iot_button_create + iot_button_register_cb), che gestisce
- * questa risorsa condivisa senza conflitti - stesso principio gia'
- * seguito per fotocamera e display.
+/* ---------- Pulsante BOOT (unico pulsante, letto via GPIO puro) ----------
+ * NOTA IMPORTANTE: i quattro pulsanti MENU/PLAY/UP/DOWN condividono un
+ * canale ADC - creare quei pulsanti (anche solo per registrarne due,
+ * come nel tentativo precedente) avvia comunque un timer interno che
+ * legge PERIODICAMENTE tutti i pulsanti dell'array, ADC compresi,
+ * andando in conflitto con la fotocamera. Il pulsante BOOT invece e'
+ * su un pin GPIO digitale indipendente (nessun ADC coinvolto) - creando
+ * SOLO questo pulsante (iot_button_new_gpio_device, non
+ * bsp_iot_button_create che li crea tutti insieme), il conflitto non
+ * puo' verificarsi per costruzione.
  *
- * Uso in questo progetto: PLAY = scatta la fotocamera vera, subito
- * (sempre disponibile); MENU = accende/spegne la modalita' automatica
- * a intervalli (invio di riferimenti dal dataset).
+ * Un solo pulsante fisico, due modi di premerlo:
+ * - pressione breve: scatta la fotocamera vera, subito
+ * - pressione lunga (~1s): accende/spegne la modalita' automatica di
+ *   invio riferimenti dal dataset - decidibile in tempo reale, senza
+ *   bisogno di modificare la configurazione e riflashare.
  */
 
 static volatile bool s_auto_mode_enabled = false;
 
-static void on_play_button_pressed(void *button_handle, void *usr_data) {
-    ESP_LOGI(TAG, "Pulsante PLAY premuto - scatto con la fotocamera vera.");
+static void on_boot_short_press(void *button_handle, void *usr_data) {
+    ESP_LOGI(TAG, "Pulsante BOOT (pressione breve) - scatto con la fotocamera vera.");
     capture_photo_on_demand();
 }
 
-static void on_menu_button_pressed(void *button_handle, void *usr_data) {
+static void on_boot_long_press(void *button_handle, void *usr_data) {
     s_auto_mode_enabled = !s_auto_mode_enabled;
-    ESP_LOGI(TAG, "Pulsante MENU premuto - modalita' automatica ora %s.",
+    ESP_LOGI(TAG, "Pulsante BOOT (pressione lunga) - modalita' automatica ora %s.",
              s_auto_mode_enabled ? "ATTIVA" : "spenta");
 }
 
 static void init_buttons(void) {
-    button_handle_t button_handles[BSP_BUTTON_NUM] = {NULL};
-    ESP_ERROR_CHECK(bsp_iot_button_create(button_handles, NULL, BSP_BUTTON_NUM));
+    button_config_t button_cfg = {
+        .long_press_time = 1000, // ms - oltre questa soglia conta come "pressione lunga"
+        .short_press_time = 50,
+    };
+    button_gpio_config_t gpio_cfg = {
+        .gpio_num = BSP_BUTTON_BOOT_IO,
+        .active_level = 0, // BOOT e' attivo basso (premuto = collegato a massa)
+    };
 
-    ESP_ERROR_CHECK(iot_button_register_cb(button_handles[BSP_BUTTON_PLAY], BUTTON_PRESS_DOWN,
-                                            NULL, on_play_button_pressed, NULL));
-    ESP_ERROR_CHECK(iot_button_register_cb(button_handles[BSP_BUTTON_MENU], BUTTON_PRESS_DOWN,
-                                            NULL, on_menu_button_pressed, NULL));
+    button_handle_t button_handle = NULL;
+    ESP_ERROR_CHECK(iot_button_new_gpio_device(&button_cfg, &gpio_cfg, &button_handle));
 
-    ESP_LOGI(TAG, "Pulsanti inizializzati (API ufficiale della scheda).");
+    ESP_ERROR_CHECK(iot_button_register_cb(button_handle, BUTTON_SINGLE_CLICK,
+                                            NULL, on_boot_short_press, NULL));
+    ESP_ERROR_CHECK(iot_button_register_cb(button_handle, BUTTON_LONG_PRESS_START,
+                                            NULL, on_boot_long_press, NULL));
+
+    ESP_LOGI(TAG, "Pulsante BOOT inizializzato (GPIO puro, nessun ADC coinvolto).");
 }
 
 /* ---------- Connessione WiFi (stesso schema del Gateway) ---------- */
@@ -401,12 +413,7 @@ void app_main(void) {
     init_camera_and_display();
     init_wifi();
     init_esp_now();
-    // TEMPORANEAMENTE DISATTIVATO: il componente ufficiale dei pulsanti
-    // (che legge lo stesso canale ADC condiviso) va in crash quando
-    // gira insieme alla fotocamera - conflitto piu' profondo di quanto
-    // pensassimo, da investigare separatamente. Per ora isoliamo il
-    // test di fotocamera+display, senza pulsanti.
-    // init_buttons();
+    init_buttons();
 
     ESP_LOGI(TAG, "Acquisition Node pronto - invio un pacchetto ogni %d ms, "
                   "%d immagini in rotazione.",

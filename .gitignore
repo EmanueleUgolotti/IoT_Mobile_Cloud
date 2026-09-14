@@ -37,7 +37,7 @@ android/.cxx/
 esp32/**/.pio/
 esp32/**/build/
 esp32/**/.vscode/
-esp32/**/.managed_components/
+esp32/**/managed_components/
 *.bin
 *.elf
 

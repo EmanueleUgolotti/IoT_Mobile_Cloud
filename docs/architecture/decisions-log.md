@@ -428,3 +428,148 @@ pulsante fisico distingue pressione breve (scatta la fotocamera) da
 pressione lunga (accende/spegne la modalita' automatica) - nessun
 bisogno di riconfigurare/riflashare per cambiare comportamento a
 runtime.
+
+## 40. Frammentazione ESP-NOW per foto vere — protocollo e primo invio
+ 
+Per mandare una foto vera (non solo un riferimento dataset) via
+ESP-NOW, serviva un protocollo a parte: un pacchetto ESP-NOW puo'
+contenere solo ~250 byte, mentre un JPEG anche piccolo pesa 10-15KB.
+ 
+**Schema scelto**: due tipi di pacchetto (separati dallo schema
+`reference` gia' esistente, mai toccato):
+- **HEADER**, mandato una volta: byte totali, numero di frammenti
+  attesi, CRC dell'immagine intera (per la verifica finale lato
+  Gateway).
+- **DATA**, uno per frammento (200 byte di payload ciascuno): indice
+  progressivo e lunghezza (l'ultimo frammento e' piu' corto).
+**Scoperta importante durante la progettazione**: la fotocamera cattura
+in formato RGB565 grezzo (necessario per l'anteprima dal vivo), NON
+JPEG - serve convertire con `frame2jpg` (gia' inclusa nel pacchetto
+della fotocamera) solo al momento dello scatto, lasciando l'anteprima
+continua invariata. Senza questa conversione, si sarebbero mandati
+~150KB di dati grezzi invece di ~10-15KB di JPEG compresso.
+ 
+**Pacing dell'invio**: il primo tentativo mandava i frammenti con una
+pausa fissa tra uno e l'altro - causava perdite intermittenti
+(`ESP_ERR_ESPNOW_NO_MEM`, coda interna di ESP-NOW riempita piu' in
+fretta di quanto la radio riuscisse a svuotarla). Risolto aspettando la
+VERA conferma di consegna (tramite la callback di invio + un
+semaforo) prima di costruire e mandare il frammento successivo, invece
+di una pausa "alla cieca".
+ 
+## 41. Il lungo percorso per stabilizzare fotocamera+pulsanti+invio insieme
+ 
+Mettere insieme fotocamera, display, pulsante fisico e invio
+frammentato nello stesso firmware ha richiesto risolvere, in sequenza,
+diversi problemi via via piu' sottili - vale la pena ripercorrerli.
+ 
+**1. Stack troppo piccolo nel task sbagliato**: la prima versione
+faceva scattare la foto direttamente dentro la callback del pulsante,
+che pero' gira sul task di sistema dedicato ai timer (stack piccolo,
+pensato per operazioni brevi) - la conversione JPEG (che ha bisogno di
+parecchia memoria di lavoro) ne causava l'overflow, corrompendo memoria
+adiacente. Risolto spostando il lavoro vero su un task dedicato,
+con uno stack generoso, svegliato da una coda quando il pulsante viene
+premuto.
+ 
+**2. RAM interna insufficiente per creare le nuove task**: con
+fotocamera+display+WiFi gia' attivi, restavano solo ~12KB di RAM
+interna libera - insufficiente per gli stack delle nuove task.
+Un primo tentativo (allocare gli stack in PSRAM) e' stato
+scartato perche' Espressif lo sconsiglia esplicitamente per task che
+toccano codice di sistema (causava un crash immediato,
+"DoubleException"). La soluzione corretta e' stata liberare RAM interna
+altrove: l'opzione "Allow .bss segment placed in external memory"
+(`idf.py menuconfig` -> ESP PSRAM) sposta i dati interni di WiFi/rete in
+PSRAM, raddoppiando la RAM interna libera (da ~12KB a ~24KB) - questo
+si', esplicitamente supportato da Espressif per questo scenario.
+ 
+**3. Un vero bug di lettura oltre i limiti, presente fin dall'inizio**:
+il codice dell'anteprima (copiato dall'esempio ufficiale Espressif)
+copiava sempre una quantita' fissa di byte dal fotogramma catturato
+(dimensionata per la risoluzione del display), anche quando il
+fotogramma vero era piu' piccolo (confermato dagli avvisi
+"FB-SIZE: X != 115200" visti nei log) - una lettura oltre la fine del
+buffer vero della fotocamera, ripetuta a ogni singolo fotogramma
+dell'anteprima continua (non solo agli scatti). Molto probabilmente la
+causa principale della maggior parte dei crash osservati fino a quel
+punto. Corretto copiando solo `min(dimensione_buffer_display,
+dimensione_fotogramma_vero)` byte.
+ 
+**4. Rischio di blocco totale (deadlock) per un tentativo di
+mitigazione successivo**: per escludere un'interferenza tra l'anteprima
+e la conversione JPEG (entrambe candidate a toccare la PSRAM nello
+stesso istante), si e' provato a sospendere di netto il task
+dell'anteprima (`vTaskSuspend`) durante lo scatto - ma sospendere un
+task puo' fermarlo in QUALSIASI istante della sua esecuzione, anche
+mentre tiene un mutex, lasciandolo bloccato per sempre (osservato: schermo
+e log completamente bloccati, nessun modo di uscirne se non
+riavviando). Corretto sostituendo la sospensione forzata con un segnale
+cooperativo (un flag booleano) che l'anteprima stessa controlla
+all'inizio di ogni ciclo, fermandosi da sola solo in un punto sicuro
+(mai mentre tiene un lucchetto).
+ 
+**Limite noto, non risolto**: anche dopo tutte queste correzioni,
+resta un crash residuo (corruzione di memoria dentro la libreria di
+conversione JPEG, `frame2jpg`/`fmt2jpg`) in circa un terzo degli
+scatti, con causa profonda non isolata con certezza nonostante
+un'indagine approfondita (esclusi: conflitto ADC, stack insufficiente,
+invio troppo rapido, lettura oltre i limiti nell'anteprima,
+interferenza display/LVGL, sospensione pericolosa di task). Ipotesi
+principale rimasta: un bug piu' sottile nella libreria stessa
+(`esp32-camera`), o un margine di risorse ancora troppo stretto per
+questa combinazione specifica di sottosistemi tutti attivi insieme su
+un chip con risorse limitate. **Decisione presa**: accettare questo
+limite documentato piuttosto che continuare a investigare
+indefinitamente - il sistema funziona nella maggioranza dei casi, una
+base solida e dimostrabile per gli scopi del progetto.
+ 
+ ## 42. Ricezione e ricomposizione delle foto lato Gateway
+ 
+Completando il lato Acquisition Node (sezioni 40-41), mancava la parte
+simmetrica sul Gateway: riconoscere i nuovi pacchetti (intestazione +
+frammenti, 212 byte, distinti dai `reference` di 76 byte tramite la
+sola dimensione ricevuta), ricomporli in un file JPEG completo,
+verificarne l'integrità, e inoltrarli.
+ 
+**Scelte di design**:
+- **Una sola ricomposizione alla volta** - coerente con l'Acquisition
+  Node, che ha un raffreddamento tra uno scatto e l'altro e non ne
+  manda mai due in parallelo. Se arriva una nuova intestazione mentre
+  la precedente non era completa, quella vecchia viene considerata
+  fallita e scartata (evita di restare bloccati su uno scatto perso per
+  sempre).
+- **Timeout indipendente dai nuovi arrivi** (15 secondi) - un task
+  dedicato controlla periodicamente se la ricomposizione in corso ha
+  superato il tempo massimo, cosi' un tentativo fallito viene rilevato
+  anche se non arriva mai un nuovo scatto a "smascherarlo".
+- **Verifica doppia dell'integrità**: il CRC di ogni singolo pacchetto
+  (rileva corruzione di un frammento in transito, gia' presente anche
+  nei `reference`) PIU' il CRC dell'immagine intera dichiarato
+  nell'intestazione (rileva un frammento mancante/sostituito che
+  individualmente sembrava valido, ma la cui assenza corromperebbe il
+  file finale).
+- **Le foto catturate NON usano la coda di retry** dei `reference` - la
+  coda esistente e' dimensionata per il piccolo pacchetto a dimensione
+  fissa `esp_now_packet_t`; una foto arriva gia' come buffer intero
+  (fino a 15-20KB), riprovarla richiederebbe una coda separata capace
+  di conservare interi file immagine. Scelta consapevole: se l'inoltro
+  di una foto fallisce, per ora viene persa con un log chiaro
+  (`*** SCATTO FALLITO ***`), non ritentata automaticamente - limite
+  noto, accettato per lo scopo di questo progetto.
+- **Notifica al backend rimandata apposta**: la funzione
+  `notify_capture_failed` esiste gia' e logga chiaramente sul Gateway,
+  ma non manda ancora nulla al backend (richiederebbe anche una
+  modifica li', fuori scope per questa sessione dedicata al solo
+  Gateway - task separato, gia' segnato in roadmap).
+**Verificato end-to-end con successo** su foto vere (non dataset):
+cattura sulla fotocamera, conversione JPEG, invio frammentato via
+ESP-NOW, ricezione e ricomposizione sul Gateway, verifica CRC positiva,
+costruzione della richiesta HTTP (base64 via mbedtls, gia' incluso per
+HTTPS - nessuna nuova dipendenza). L'unico anello che continua a
+fallire e' l'inoltro finale verso il telefono - confermato essere lo
+stesso identico problema di rete/hotspot gia' noto per i pacchetti
+`reference` (stesso tipo di errore, `ESP_ERR_HTTP_CONNECT` /
+`select() timeout`, ben prima che la dimensione della foto entri in
+gioco), non un difetto legato alla dimensione dei dati o al codice di
+questo task.

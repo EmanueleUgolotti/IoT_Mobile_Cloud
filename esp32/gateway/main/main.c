@@ -4,16 +4,26 @@
  * Task 1 (fatto): inizializzazione WiFi/ESP-NOW, ricezione e validazione
  * pacchetti dall'Acquisition Node.
  *
- * Task 2 (questo file): connessione WiFi vera (necessaria per l'HTTP),
+ * Task 2 (fatto): connessione WiFi vera (necessaria per l'HTTP),
  * decisione di offloading (Cloud in priorita', Mobile come riserva se
  * il Cloud non e' raggiungibile), costruzione del payload JSON coerente
  * con network-design.md, inoltro HTTP verso /cloud/ingest o
- * /mobile/ingest.
+ * /mobile/ingest, coda locale di retry.
  *
- * NON ancora incluso in questo task: coda locale di retry se l'inoltro
- * fallisce (WiFi assente, backend giu') - se l'inoltro fallisce, per
- * ora il pacchetto viene semplicemente perso con un log di avviso. La
- * coda di retry e' il prossimo task (vedi docs/roadmap.md).
+ * Task 3 (questo file): ricezione e ricomposizione di foto vere,
+ * mandate frammentate dall'Acquisition Node (un pacchetto ESP-NOW non
+ * contiene una foto intera - vedi lo schema esp_now_frag_packet_t sotto,
+ * IDENTICO byte per byte a quello nel firmware dell'Acquisition Node).
+ * Una volta ricomposta e verificata (CRC), viene inoltrata come
+ * modalita' 'captured' con lo stesso meccanismo di offloading gia'
+ * usato per i pacchetti 'reference'.
+ *
+ * NOTA SULLO SCOPE DI QUESTO TASK: se un tentativo di scatto fallisce
+ * (pezzi mancanti, CRC non valido, inoltro fallito), per ora viene solo
+ * LOGGATO chiaramente su questo Gateway - notificare il backend (cosi'
+ * l'app/Cloud possano mostrare "scatto da rifare") e' un piccolo passo
+ * successivo separato, che richiede anche una modifica al backend
+ * (vedi roadmap).
  *
  * Configurazione (WiFi, indirizzi backend, API key): tramite
  * "idf.py menuconfig" -> "BPA Gateway Configuration", vedi
@@ -35,6 +45,7 @@
 #include "esp_http_client.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
+#include "mbedtls/base64.h"
 
 static const char *TAG = "BPA_GATEWAY";
 
@@ -43,12 +54,18 @@ static const char *TAG = "BPA_GATEWAY";
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 
-/* ---------- Coda locale di retry ----------
+/* ---------- Coda locale di retry (solo per pacchetti 'reference') ----------
  * Se l'inoltro fallisce sia verso Cloud sia verso Mobile, il pacchetto
  * viene messo in questa coda invece di essere perso subito. Un task in
  * background riprova periodicamente, rifacendo da capo la decisione di
  * offloading (non si fissa sulla stessa destinazione che era fallita -
  * se nel frattempo il Cloud torna raggiungibile, ci prova).
+ *
+ * NOTA: le foto catturate (modalita' 'captured') NON usano questa coda
+ * - richiederebbe conservare l'intero buffer immagine (fino a decine di
+ * KB) invece di un piccolo pacchetto a dimensione fissa. Se l'inoltro di
+ * una foto fallisce, per ora viene semplicemente persa con un log
+ * chiaro (vedi notify_capture_failed) - limite noto, accettato.
  *
  * LIMITE NOTO (documentato, non risolto qui): la coda vive solo in RAM,
  * viene persa se il Gateway si riavvia. Risolverlo richiederebbe
@@ -61,7 +78,7 @@ static EventGroupHandle_t s_wifi_event_group;
 
 static QueueHandle_t s_retry_queue;
 
-/* ---------- Schema del pacchetto ESP-NOW (invariato dal Task 1) ---------- */
+/* ---------- Schema del pacchetto ESP-NOW 'reference' (invariato) ---------- */
 
 typedef enum {
     MODE_REFERENCE = 0,
@@ -81,6 +98,47 @@ typedef struct __attribute__((packed)) {
 
 static uint16_t compute_packet_crc(const esp_now_packet_t *packet) {
     size_t len_without_crc = sizeof(esp_now_packet_t) - sizeof(uint16_t);
+    return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
+}
+
+/* ---------- Schema dei pacchetti per foto vere (modalita' 'captured') ----------
+ * IDENTICO, byte per byte, a quello nel firmware dell'Acquisition Node
+ * (esp32/acquisition-node/main/main.c) - i due dispositivi devono
+ * "parlare la stessa lingua". Se uno dei due cambia, va aggiornato
+ * anche l'altro.
+ */
+
+typedef enum {
+    FRAG_PACKET_HEADER = 0,
+    FRAG_PACKET_DATA = 1,
+} frag_packet_type_t;
+
+#define FRAGMENT_DATA_SIZE 200
+
+typedef struct __attribute__((packed)) {
+    uint8_t node_id;
+    uint32_t seq_num;
+    uint8_t packet_type;
+
+    union {
+        struct __attribute__((packed)) {
+            uint32_t total_size;
+            uint16_t total_fragments;
+            uint16_t image_crc;
+        } header;
+
+        struct __attribute__((packed)) {
+            uint16_t fragment_index;
+            uint16_t fragment_len;
+            uint8_t data[FRAGMENT_DATA_SIZE];
+        } fragment;
+    } payload;
+
+    uint16_t crc;
+} esp_now_frag_packet_t;
+
+static uint16_t compute_frag_packet_crc(const esp_now_frag_packet_t *packet) {
+    size_t len_without_crc = sizeof(esp_now_frag_packet_t) - sizeof(uint16_t);
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
@@ -137,6 +195,15 @@ static void init_wifi(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    // Disattiva il risparmio energetico del radio WiFi: di default,
+    // ESP-IDF alterna periodicamente il radio in "modem sleep" per
+    // risparmiare energia - questo pero' fa perdere pacchetti ESP-NOW
+    // in arrivo proprio durante quelle brevi finestre di sonno (sintomo
+    // osservato: consegne alternate, un pacchetto sì e uno no). Con
+    // entrambe le board alimentate da USB (non a batteria), il consumo
+    // extra non e' un problema per questo progetto.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     ESP_LOGI(TAG, "Connessione a rete WiFi '%s' in corso...", CONFIG_BPA_WIFI_SSID);
 
@@ -201,27 +268,59 @@ static char *build_json_payload(const esp_now_packet_t *packet, const char *requ
     // (ordine di arrivo, request_id univoco) non dipende da questo valore.
     cJSON_AddStringToObject(root, "gateway_timestamp", "1970-01-01T00:00:00Z");
 
-    if (packet->mode == MODE_REFERENCE) {
-        cJSON_AddStringToObject(root, "mode", "reference");
-        cJSON_AddStringToObject(root, "image_ref", packet->image_ref);
-        cJSON_AddStringToObject(root, "dataset_id", "bpa_v1");
-    } else {
-        // Modalita' captured non ancora gestita del tutto (richiede la
-        // frammentazione ESP-NOW, non ancora progettata - vedi roadmap).
-        // "image_data" vuoto e' solo un placeholder per far rispondere
-        // l'app velocemente durante i test di connettivita' (evita che
-        // l'app provi a decodificare/classificare, restando cosi' subito
-        // libera di rispondere) - NON e' l'implementazione reale.
-        cJSON_AddStringToObject(root, "mode", "captured");
-        cJSON_AddStringToObject(root, "capture_id", "selftest");
-        cJSON_AddStringToObject(root, "image_data", "");
-    }
+    cJSON_AddStringToObject(root, "mode", "reference");
+    cJSON_AddStringToObject(root, "image_ref", packet->image_ref);
+    cJSON_AddStringToObject(root, "dataset_id", "bpa_v1");
 
     cJSON_AddNumberToObject(root, "retry_attempt", 0);
 
     char *json_string = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     return json_string;  // il chiamante deve fare free() su questo puntatore
+}
+
+/*
+ * Costruisce il payload JSON per una foto vera, gia' ricomposta e
+ * verificata - stesso schema 'captured' che il backend gia' gestisce,
+ * con l'immagine codificata in base64 (mbedtls, gia' incluso per HTTPS,
+ * riusato qui - nessuna nuova dipendenza).
+ */
+static char *build_captured_json_payload(uint8_t node_id, uint32_t seq_num,
+                                          const uint8_t *jpeg_data, size_t jpeg_len,
+                                          const char *request_id) {
+    size_t b64_capacity = 4 * ((jpeg_len + 2) / 3) + 4;
+    char *b64_buf = malloc(b64_capacity);
+    if (!b64_buf) {
+        return NULL;
+    }
+
+    size_t actual_len = 0;
+    int err = mbedtls_base64_encode((unsigned char *)b64_buf, b64_capacity, &actual_len,
+                                     jpeg_data, jpeg_len);
+    if (err != 0) {
+        free(b64_buf);
+        return NULL;
+    }
+    b64_buf[actual_len] = '\0';
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "request_id", request_id);
+    cJSON_AddNumberToObject(root, "node_id", node_id);
+    cJSON_AddNumberToObject(root, "seq_num", seq_num);
+    cJSON_AddStringToObject(root, "gateway_timestamp", "1970-01-01T00:00:00Z");
+    cJSON_AddStringToObject(root, "mode", "captured");
+
+    char capture_id[32];
+    snprintf(capture_id, sizeof(capture_id), "node%d-%06lu", node_id, (unsigned long)seq_num);
+    cJSON_AddStringToObject(root, "capture_id", capture_id);
+    cJSON_AddStringToObject(root, "image_data", b64_buf);
+    cJSON_AddNumberToObject(root, "retry_attempt", 0);
+
+    free(b64_buf);
+
+    char *json_string = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return json_string;
 }
 
 /* ---------- Inoltro HTTP verso Cloud o Mobile ---------- */
@@ -262,11 +361,11 @@ static bool forward_via_http(const char *host, int port, const char *endpoint_pa
 }
 
 /*
- * Decide dove mandare il pacchetto (offloading) e lo inoltra.
- *
- * Regola di offloading: priorita' al Cloud (piu' potenza di calcolo
- * disponibile); se il Cloud non risponde a un controllo rapido, il
- * Mobile diventa il piano di riserva.
+ * Decide dove mandare il pacchetto 'reference' (offloading) e lo
+ * inoltra. Regola di offloading: priorita' al Cloud (piu' potenza di
+ * calcolo disponibile); se il Cloud non risponde a un controllo
+ * rapido, il Mobile diventa il piano di riserva. Stessa regola usata
+ * anche per le foto catturate (vedi forward_captured_photo sotto).
  */
 static void handle_offloading_and_forward(const esp_now_packet_t *packet) {
     char *request_id = build_request_id(packet->node_id, packet->seq_num);
@@ -305,7 +404,234 @@ static void handle_offloading_and_forward(const esp_now_packet_t *packet) {
     free(json_payload);
 }
 
-/* ---------- Ricezione ESP-NOW (Task 1, invariato) ---------- */
+/*
+ * Registra un tentativo di scatto fallito (pezzi mancanti, CRC non
+ * valido, o inoltro fallito). Per ora solo un log chiaro sul Gateway -
+ * notificare il backend (cosi' l'app/Cloud possono mostrare "scatto da
+ * rifare") e' un piccolo passo successivo separato, non ancora fatto
+ * in questo task (richiede anche una modifica al backend).
+ */
+static void notify_capture_failed(uint8_t node_id, uint32_t seq_num, const char *reason) {
+    ESP_LOGW(TAG, "*** SCATTO FALLITO *** nodo=%d seq=%lu - motivo: %s. "
+                  "(la notifica al backend non e' ancora implementata - prossimo task)",
+             node_id, (unsigned long)seq_num, reason);
+}
+
+/*
+ * Inoltra una foto vera, gia' ricomposta e verificata, usando la stessa
+ * logica di offloading dei pacchetti 'reference' (Cloud prima, Mobile
+ * come riserva). A differenza dei pacchetti 'reference', in caso di
+ * fallimento NON viene accodata per un retry (richiederebbe conservare
+ * l'intero buffer immagine) - viene solo segnalata come fallita.
+ */
+static void forward_captured_photo(uint8_t node_id, uint32_t seq_num,
+                                    const uint8_t *jpeg_data, size_t jpeg_len) {
+    char request_id[32];
+    snprintf(request_id, sizeof(request_id), "gw01-node%d-c%06lu", node_id, (unsigned long)seq_num);
+
+    char *json_payload = build_captured_json_payload(node_id, seq_num, jpeg_data, jpeg_len, request_id);
+    if (json_payload == NULL) {
+        ESP_LOGE(TAG, "Errore nella costruzione del payload JSON per la foto catturata.");
+        notify_capture_failed(node_id, seq_num, "errore nella costruzione del payload JSON");
+        return;
+    }
+
+    bool sent = false;
+
+    if (is_cloud_reachable()) {
+        ESP_LOGI(TAG, "Cloud raggiungibile - inoltro foto catturata verso Cloud");
+        sent = forward_via_http(CONFIG_BPA_CLOUD_HOST, CONFIG_BPA_CLOUD_PORT,
+                                 "/cloud/ingest", json_payload);
+    } else {
+        ESP_LOGI(TAG, "Cloud non raggiungibile - inoltro foto catturata verso Mobile (riserva)");
+        sent = forward_via_http(CONFIG_BPA_MOBILE_HOST, CONFIG_BPA_MOBILE_PORT,
+                                 "/mobile/ingest", json_payload);
+    }
+
+    if (!sent) {
+        notify_capture_failed(node_id, seq_num, "inoltro fallito su entrambe le destinazioni");
+    }
+
+    free(json_payload);
+}
+
+/* ---------- Ricezione e ricomposizione di foto frammentate ----------
+ * Stato di UNA SOLA ricomposizione alla volta (coerente con l'
+ * Acquisition Node, che ha un raffreddamento tra uno scatto e l'altro
+ * e non ne manda mai due in parallelo).
+ */
+
+static uint8_t *s_reassembly_buffer = NULL;
+static bool *s_reassembly_fragment_received = NULL;
+static uint32_t s_reassembly_total_size = 0;
+static uint16_t s_reassembly_total_fragments = 0;
+static uint16_t s_reassembly_fragments_received_count = 0;
+static uint16_t s_reassembly_image_crc = 0;
+static uint8_t s_reassembly_node_id = 0;
+static uint32_t s_reassembly_seq_num = 0;
+static int64_t s_reassembly_start_time_ms = 0;
+
+// Se una ricomposizione non si completa entro questo tempo, e'
+// considerata fallita (pezzi persi per strada) e scartata.
+#define REASSEMBLY_TIMEOUT_MS 15000
+
+static bool reassembly_in_progress(void) {
+    return s_reassembly_buffer != NULL;
+}
+
+static void free_reassembly_state(void) {
+    if (s_reassembly_buffer != NULL) {
+        free(s_reassembly_buffer);
+        s_reassembly_buffer = NULL;
+    }
+    if (s_reassembly_fragment_received != NULL) {
+        free(s_reassembly_fragment_received);
+        s_reassembly_fragment_received = NULL;
+    }
+    s_reassembly_total_size = 0;
+    s_reassembly_total_fragments = 0;
+    s_reassembly_fragments_received_count = 0;
+}
+
+static void handle_frag_header(const esp_now_frag_packet_t *packet) {
+    if (reassembly_in_progress()) {
+        ESP_LOGW(TAG, "Nuova foto in arrivo (nodo=%d seq=%lu) mentre la precedente "
+                      "(nodo=%d seq=%lu) non era completa (%u/%u frammenti).",
+                 packet->node_id, (unsigned long)packet->seq_num,
+                 s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
+                 s_reassembly_fragments_received_count, s_reassembly_total_fragments);
+        notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
+                               "sovrascritta da un nuovo scatto prima di completarsi");
+        free_reassembly_state();
+    }
+
+    uint32_t total_size = packet->payload.header.total_size;
+    uint16_t total_fragments = packet->payload.header.total_fragments;
+
+    if (total_size == 0 || total_fragments == 0) {
+        ESP_LOGW(TAG, "Intestazione non valida (dimensione o numero frammenti a zero) - ignorata.");
+        return;
+    }
+
+    s_reassembly_buffer = malloc(total_size);
+    if (s_reassembly_buffer == NULL) {
+        ESP_LOGE(TAG, "Impossibile allocare %lu byte per la ricomposizione della foto.",
+                 (unsigned long)total_size);
+        notify_capture_failed(packet->node_id, packet->seq_num, "memoria insufficiente sul Gateway");
+        return;
+    }
+
+    s_reassembly_fragment_received = calloc(total_fragments, sizeof(bool));
+    if (s_reassembly_fragment_received == NULL) {
+        ESP_LOGE(TAG, "Impossibile allocare la mappa dei frammenti.");
+        free(s_reassembly_buffer);
+        s_reassembly_buffer = NULL;
+        notify_capture_failed(packet->node_id, packet->seq_num, "memoria insufficiente sul Gateway");
+        return;
+    }
+
+    s_reassembly_total_size = total_size;
+    s_reassembly_total_fragments = total_fragments;
+    s_reassembly_image_crc = packet->payload.header.image_crc;
+    s_reassembly_node_id = packet->node_id;
+    s_reassembly_seq_num = packet->seq_num;
+    s_reassembly_fragments_received_count = 0;
+    s_reassembly_start_time_ms = esp_timer_get_time() / 1000;
+
+    ESP_LOGI(TAG, "Ricezione foto iniziata (nodo=%d seq=%lu): %lu byte attesi, %u frammenti.",
+             packet->node_id, (unsigned long)packet->seq_num,
+             (unsigned long)total_size, total_fragments);
+}
+
+static void handle_frag_data(const esp_now_frag_packet_t *packet) {
+    if (!reassembly_in_progress()) {
+        ESP_LOGW(TAG, "Frammento ricevuto (nodo=%d seq=%lu) senza un'intestazione "
+                      "precedente - scartato.",
+                 packet->node_id, (unsigned long)packet->seq_num);
+        return;
+    }
+
+    if (packet->node_id != s_reassembly_node_id || packet->seq_num != s_reassembly_seq_num) {
+        ESP_LOGW(TAG, "Frammento di uno scatto diverso da quello in corso - scartato.");
+        return;
+    }
+
+    uint16_t index = packet->payload.fragment.fragment_index;
+    uint16_t len = packet->payload.fragment.fragment_len;
+
+    if (index >= s_reassembly_total_fragments) {
+        ESP_LOGW(TAG, "Indice frammento fuori range (%u, attesi max %u) - scartato.",
+                 index, s_reassembly_total_fragments);
+        return;
+    }
+
+    size_t offset = (size_t)index * FRAGMENT_DATA_SIZE;
+    if (offset + len > s_reassembly_total_size) {
+        ESP_LOGW(TAG, "Frammento %u fuori dai limiti del buffer della foto - scartato.", index);
+        return;
+    }
+
+    memcpy(s_reassembly_buffer + offset, packet->payload.fragment.data, len);
+
+    if (!s_reassembly_fragment_received[index]) {
+        s_reassembly_fragment_received[index] = true;
+        s_reassembly_fragments_received_count++;
+    }
+
+    if (s_reassembly_fragments_received_count < s_reassembly_total_fragments) {
+        return; // ancora incompleta, aspetta altri frammenti
+    }
+
+    // Tutti i frammenti attesi sono arrivati - verifica l'integrita'
+    // prima di inoltrare, confrontando il CRC calcolato ora con quello
+    // dichiarato nell'intestazione (protegge da corruzione durante la
+    // trasmissione radio, non solo da pezzi mancanti).
+    uint16_t computed_crc = esp_rom_crc16_le(CRC_SEED, s_reassembly_buffer, s_reassembly_total_size);
+
+    if (computed_crc == s_reassembly_image_crc) {
+        ESP_LOGI(TAG, "Foto ricomposta con successo (nodo=%d seq=%lu): %lu byte, CRC verificato.",
+                 s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
+                 (unsigned long)s_reassembly_total_size);
+        forward_captured_photo(s_reassembly_node_id, s_reassembly_seq_num,
+                                s_reassembly_buffer, s_reassembly_total_size);
+    } else {
+        ESP_LOGW(TAG, "Foto ricomposta ma CRC non corrisponde (atteso 0x%04X, calcolato 0x%04X).",
+                 s_reassembly_image_crc, computed_crc);
+        notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
+                               "CRC non valido dopo la ricomposizione (corruzione in trasmissione)");
+    }
+
+    free_reassembly_state();
+}
+
+/*
+ * Task in background che controlla se una ricomposizione in corso ha
+ * superato il tempo massimo senza completarsi (pezzi persi per strada,
+ * senza che ne sia mai arrivato uno nuovo per accorgersene subito).
+ */
+static void reassembly_timeout_task(void *pvParameters) {
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        if (!reassembly_in_progress()) {
+            continue;
+        }
+
+        int64_t elapsed_ms = (esp_timer_get_time() / 1000) - s_reassembly_start_time_ms;
+        if (elapsed_ms > REASSEMBLY_TIMEOUT_MS) {
+            ESP_LOGW(TAG, "Ricomposizione scaduta (nodo=%d seq=%lu): %u/%u frammenti "
+                          "ricevuti dopo %lld secondi.",
+                     s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
+                     s_reassembly_fragments_received_count, s_reassembly_total_fragments,
+                     elapsed_ms / 1000);
+            notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
+                                   "timeout - pezzi mancanti, ricezione mai completata");
+            free_reassembly_state();
+        }
+    }
+}
+
+/* ---------- Ricezione ESP-NOW ---------- */
 
 static void log_own_mac_address(void) {
     uint8_t mac[6];
@@ -319,45 +645,63 @@ static void on_esp_now_data_received(const esp_now_recv_info_t *recv_info,
                                       const uint8_t *data, int data_len) {
     const uint8_t *sender_mac = recv_info->src_addr;
 
-    if (data_len != sizeof(esp_now_packet_t)) {
-        ESP_LOGW(TAG, "Pacchetto di dimensione inattesa da %02X:%02X:%02X:%02X:%02X:%02X "
-                      "(%d byte, attesi %d) - scartato",
-                 sender_mac[0], sender_mac[1], sender_mac[2],
-                 sender_mac[3], sender_mac[4], sender_mac[5],
-                 data_len, (int)sizeof(esp_now_packet_t));
+    // Pacchetto 'reference' (nome file dal dataset)
+    if (data_len == sizeof(esp_now_packet_t)) {
+        esp_now_packet_t packet;
+        memcpy(&packet, data, sizeof(esp_now_packet_t));
+
+        uint16_t expected_crc = compute_packet_crc(&packet);
+        if (packet.crc != expected_crc) {
+            ESP_LOGW(TAG, "CRC non valido da nodo %d, seq %lu (atteso 0x%04X, ricevuto 0x%04X) - "
+                          "pacchetto scartato (possibile corruzione in trasmissione)",
+                     packet.node_id, (unsigned long)packet.seq_num, expected_crc, packet.crc);
+            return;
+        }
+
+        packet.image_ref[sizeof(packet.image_ref) - 1] = '\0';
+
+        ESP_LOGI(TAG, "Pacchetto valido ricevuto - nodo=%d seq=%lu mode=reference image_ref='%s'",
+                 packet.node_id, (unsigned long)packet.seq_num, packet.image_ref);
+
+        handle_offloading_and_forward(&packet);
         return;
     }
 
-    esp_now_packet_t packet;
-    memcpy(&packet, data, sizeof(esp_now_packet_t));
+    // Pacchetto di frammentazione (intestazione o pezzo di una foto vera)
+    if (data_len == sizeof(esp_now_frag_packet_t)) {
+        esp_now_frag_packet_t frag_packet;
+        memcpy(&frag_packet, data, sizeof(esp_now_frag_packet_t));
 
-    uint16_t expected_crc = compute_packet_crc(&packet);
-    if (packet.crc != expected_crc) {
-        ESP_LOGW(TAG, "CRC non valido da nodo %d, seq %lu (atteso 0x%04X, ricevuto 0x%04X) - "
-                      "pacchetto scartato (possibile corruzione in trasmissione)",
-                 packet.node_id, (unsigned long)packet.seq_num, expected_crc, packet.crc);
+        uint16_t expected_crc = compute_frag_packet_crc(&frag_packet);
+        if (frag_packet.crc != expected_crc) {
+            ESP_LOGW(TAG, "CRC non valido su un pacchetto di frammentazione da nodo %d - scartato "
+                          "(possibile corruzione in trasmissione).",
+                     frag_packet.node_id);
+            return;
+        }
+
+        if (frag_packet.packet_type == FRAG_PACKET_HEADER) {
+            handle_frag_header(&frag_packet);
+        } else if (frag_packet.packet_type == FRAG_PACKET_DATA) {
+            handle_frag_data(&frag_packet);
+        } else {
+            ESP_LOGW(TAG, "Tipo di pacchetto di frammentazione sconosciuto (%d) - scartato.",
+                     frag_packet.packet_type);
+        }
         return;
     }
 
-    packet.image_ref[sizeof(packet.image_ref) - 1] = '\0';
-
-    ESP_LOGI(TAG, "Pacchetto valido ricevuto - nodo=%d seq=%lu mode=%s image_ref='%s'",
-             packet.node_id,
-             (unsigned long)packet.seq_num,
-             packet.mode == MODE_REFERENCE ? "reference" : "captured",
-             packet.mode == MODE_REFERENCE ? packet.image_ref : "(captured, non gestito in questo task)");
-
-    handle_offloading_and_forward(&packet);
+    // Ne' l'uno ne' l'altro schema conosciuto
+    ESP_LOGW(TAG, "Pacchetto di dimensione inattesa da %02X:%02X:%02X:%02X:%02X:%02X "
+                  "(%d byte) - scartato",
+             sender_mac[0], sender_mac[1], sender_mac[2],
+             sender_mac[3], sender_mac[4], sender_mac[5], data_len);
 }
 
 /*
- * Task in background che svuota periodicamente la coda di retry,
- * riprovando l'inoltro di ogni pacchetto rimasto in sospeso. Rifa' da
- * capo l'intera decisione di offloading (non si fissa sulla
- * destinazione che era fallita in precedenza) - se un pacchetto fallisce
- * di nuovo, torna semplicemente in coda per il giro successivo (gestito
- * dalla stessa logica di handle_offloading_and_forward, senza bisogno
- * di codice duplicato qui).
+ * Task in background che svuota periodicamente la coda di retry (solo
+ * pacchetti 'reference' - vedi nota sulla coda in cima al file),
+ * riprovando l'inoltro di ogni pacchetto rimasto in sospeso.
  */
 static void retry_task(void *pvParameters) {
     for (;;) {
@@ -371,13 +715,10 @@ static void retry_task(void *pvParameters) {
         ESP_LOGI(TAG, "Retry: %u pacchetti in coda, nuovo tentativo di inoltro...",
                  (unsigned int)pending);
 
-        // Svuota la coda cosi' com'e' ORA (non quella che si riempie nel
-        // frattempo con nuovi fallimenti durante questo stesso giro di
-        // retry - quelli aspetteranno il giro successivo).
         for (UBaseType_t i = 0; i < pending; i++) {
             esp_now_packet_t packet;
             if (xQueueReceive(s_retry_queue, &packet, 0) != pdTRUE) {
-                break; // coda gia' vuota (non dovrebbe succedere, per sicurezza)
+                break;
             }
             handle_offloading_and_forward(&packet);
         }
@@ -404,11 +745,6 @@ static void send_selftest_dummy_packet(void) {
 
     esp_now_packet_t dummy_packet = {
         .node_id = 1,
-        // Il request_id (node_id + seq_num) deve essere univoco nel
-        // database - usiamo il tempo trascorso da boot per farlo
-        // cambiare ad ogni test, invece di un valore fisso che
-        // causerebbe un errore "duplicate key" dal secondo tentativo
-        // in poi.
         .seq_num = (uint32_t)(esp_timer_get_time() / 1000),
         .mode = MODE_REFERENCE,
         .timestamp = 0,
@@ -423,7 +759,7 @@ static void send_selftest_dummy_packet(void) {
 #endif
 
 void app_main(void) {
-    ESP_LOGI(TAG, "Avvio firmware Gateway (Task 2: offloading + inoltro HTTP)");
+    ESP_LOGI(TAG, "Avvio firmware Gateway (Task 3: ricezione e ricomposizione foto)");
 
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -446,11 +782,15 @@ void app_main(void) {
                  RETRY_QUEUE_DEPTH, RETRY_INTERVAL_MS / 1000);
     }
 
+    xTaskCreate(reassembly_timeout_task, "reassembly_timeout", 4096, NULL, 5, NULL);
+    ESP_LOGI(TAG, "Controllo timeout ricomposizione foto attivo (%d secondi).",
+             REASSEMBLY_TIMEOUT_MS / 1000);
+
     ESP_LOGI(TAG, "Gateway pronto. In attesa di pacchetti dall'Acquisition Node.");
 
 #if CONFIG_BPA_SELFTEST_SEND_DUMMY_PACKET
     if (is_wifi_connected()) {
-        vTaskDelay(pdMS_TO_TICKS(1000)); // piccolo margine, non indispensabile
+        vTaskDelay(pdMS_TO_TICKS(1000));
         send_selftest_dummy_packet();
     } else {
         ESP_LOGW(TAG, "SELFTEST saltato: WiFi non ancora connesso al momento "

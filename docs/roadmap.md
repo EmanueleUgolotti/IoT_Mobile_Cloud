@@ -265,7 +265,7 @@ creeremo.
   → `esp32/gateway/main/main.c`
 
 ## ESP32 #1 — Acquisition Node
-
+ 
 - ✅ **Modalità `reference`** — sceglie un'immagine dal dataset e manda solo
   il riferimento. **Testato end-to-end** insieme al Gateway.
   → `esp32/acquisition-node/`
@@ -279,12 +279,38 @@ creeremo.
   → `esp32/acquisition-node/main.c`, `esp32/display_camera/` (progetto di
   prova, mantenuto come riferimento/prova che l'hardware funziona
   isolatamente - vedi decisions-log)
-- ⬜ **Frammentazione ESP-NOW + modalità `captured`** — spezzare una foto
-  vera in più pacchetti ESP-NOW (troppo grande per un pacchetto solo),
-  ricomponibile lato Gateway, poi inoltrabile come modalità `captured`
-  (già gestita dal backend). Include la notifica di un tentativo fallito
-  (pezzi persi) al backend, cosi' l'utente sa che lo scatto va rifatto.
-  → `esp32/acquisition-node/`, `esp32/gateway/`
+- 🟡 **Frammentazione ESP-NOW lato Acquisition Node** — spezza una foto
+  JPEG vera in pacchetti ESP-NOW (intestazione + frammenti numerati),
+  mandati con conferma di consegna reale (non pause fisse). **Funzionante
+  nella maggioranza dei casi (~65-90% a seconda della sessione)** - un
+  difetto residuo, non ancora completamente risolto, causa un crash
+  della scheda in una minoranza di scatti (corruzione di memoria dentro
+  la libreria di conversione JPEG, causa profonda non isolata con
+  certezza nonostante un'indagine approfondita - vedi decisions-log,
+  sezioni 40-41, per il percorso completo e i bug reali trovati e
+  corretti lungo la strada). Limite noto, accettato per ora.
+  → `esp32/acquisition-node/main.c`
+- ✅ **Ricezione e ricomposizione lato Gateway** — riconosce i pacchetti
+  di intestazione/frammento, ricompone il JPEG completo, verifica
+  l'integrità (CRC), e lo inoltra come modalità `captured` (già gestita
+  dal backend), con lo stesso meccanismo di offloading dei pacchetti
+  `reference` (Cloud prima, Mobile come riserva). **Testato end-to-end
+  con successo**: cattura → conversione → invio radio frammentato →
+  ricezione → ricomposizione → verifica CRC, tutti confermati funzionanti
+  su foto vere (non dataset). L'unico anello che ancora fallisce è
+  l'ultimo miglio verso il telefono (stesso problema di rete/hotspot già
+  noto per i pacchetti `reference`, non un difetto di questo codice -
+  vedi decisions-log).
+  → `esp32/gateway/main.c`
+- ⬜ **Notifica di scatto fallito al backend** — se una foto non arriva
+  completa (pezzi mancanti, CRC non valido) o non viene inoltrata con
+  successo, il Gateway oggi lo registra solo nei propri log
+  (`*** SCATTO FALLITO ***`) - manca ancora l'endpoint/campo lato
+  backend per notificarlo a Cloud/app, così l'utente sa che lo scatto va
+  rifatto. Piccolo passo separato, rimandato apposta per non mescolare
+  Gateway e backend nella stessa sessione di lavoro.
+  → `esp32/gateway/main.c` (funzione `notify_capture_failed`, già pronta
+  lato Gateway), `backend/api/main.py`, `backend/database/init.sql`
 
 ## Robustezza / gestione errori (trasversale a più pezzi)
 
@@ -316,7 +342,7 @@ creeremo.
 - ⬜ **Decisione dataset**: bloodstain o CIFAR-10 — da chiudere quando si
   arriva a questo modulo
   → `backend/robustness/`, `experiments/`
-- 🔶 **App mobile come "telecomando" per gli attacchi adversarial**
+-  ✅ **App mobile come "telecomando" per gli attacchi adversarial**
   (in corso — backend pronto e verificato, endpoint e app non ancora fatti) —
   l'app NON esegue gli attacchi (richiederebbero riscrivere in Java
   codice numerico intensivo, es. NumPy/PyTorch, con alto rischio di bug
@@ -407,8 +433,6 @@ creeremo.
 
 ## Estensioni opzionali (solo se avanza tempo)
 
-- ⬜ Frammentazione ESP-NOW per la modalità `captured`
-  → `esp32/acquisition-node/`, `esp32/gateway/`
 - ⬜ MQTT come alternativa/affiancamento a HTTP
   → `backend/api/`, `docker/docker-compose.yml`, `esp32/gateway/`
 - ⬜ Docker Swarm come estensione del deployment

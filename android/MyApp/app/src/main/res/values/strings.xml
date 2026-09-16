@@ -23,7 +23,6 @@
     <string name="home_source_format">Fonte: %1$s — ore %2$s</string>
     <string name="home_tap_for_details">Tocca per vedere immagine e dettagli</string>
 
-
     <!-- Dettaglio risultato -->
     <string name="detail_title">Dettaglio risultato</string>
     <string name="detail_image_description">Immagine analizzata</string>
@@ -129,4 +128,16 @@
     <string name="history_sync_cloud_success">%1$d nuove classificazioni sincronizzate dal Cloud</string>
     <string name="history_sync_cloud_up_to_date">Cronologia già aggiornata</string>
     <string name="history_sync_cloud_error">Errore durante la sincronizzazione dal Cloud</string>
+
+    <!-- Finestra live sul Cloud -->
+    <string name="home_cloud_live_title">Vedi il Cloud</string>
+    <string name="home_cloud_live_subtitle">Classificazioni e scatti falliti, al volo, senza scaricare nulla</string>
+    <string name="cloud_live_title">Cloud - Vista live</string>
+    <string name="cloud_live_refresh_button">Aggiorna</string>
+    <string name="cloud_live_loading">Caricamento in corso…</string>
+    <string name="cloud_live_empty">Nessun dato disponibile sul Cloud al momento</string>
+    <string name="cloud_live_error">Errore: %1$s</string>
+    <string name="cloud_live_result_subtitle">%1$s (%2$.1f%%)</string>
+    <string name="cloud_live_failure_title">Scatto fallito - nodo %1$d, seq %2$d</string>
+    <string name="cloud_live_failure_subtitle">Motivo: %1$s</string>
 </resources>

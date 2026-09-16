@@ -128,4 +128,16 @@
     <string name="history_sync_cloud_success">%1$d new classifications synced from Cloud</string>
     <string name="history_sync_cloud_up_to_date">History already up to date</string>
     <string name="history_sync_cloud_error">Error syncing from Cloud</string>
+
+    <!-- Live Cloud window -->
+    <string name="home_cloud_live_title">View Cloud</string>
+    <string name="home_cloud_live_subtitle">Classifications and failed captures, live, without downloading anything</string>
+    <string name="cloud_live_title">Cloud - Live view</string>
+    <string name="cloud_live_refresh_button">Refresh</string>
+    <string name="cloud_live_loading">Loading…</string>
+    <string name="cloud_live_empty">No data available on the Cloud right now</string>
+    <string name="cloud_live_error">Error: %1$s</string>
+    <string name="cloud_live_result_subtitle">%1$s (%2$.1f%%)</string>
+    <string name="cloud_live_failure_title">Failed capture - node %1$d, seq %2$d</string>
+    <string name="cloud_live_failure_subtitle">Reason: %1$s</string>
 </resources>

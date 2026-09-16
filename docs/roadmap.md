@@ -302,15 +302,32 @@ creeremo.
   noto per i pacchetti `reference`, non un difetto di questo codice -
   vedi decisions-log).
   → `esp32/gateway/main.c`
-- ⬜ **Notifica di scatto fallito al backend** — se una foto non arriva
-  completa (pezzi mancanti, CRC non valido) o non viene inoltrata con
-  successo, il Gateway oggi lo registra solo nei propri log
-  (`*** SCATTO FALLITO ***`) - manca ancora l'endpoint/campo lato
-  backend per notificarlo a Cloud/app, così l'utente sa che lo scatto va
-  rifatto. Piccolo passo separato, rimandato apposta per non mescolare
-  Gateway e backend nella stessa sessione di lavoro.
-  → `esp32/gateway/main.c` (funzione `notify_capture_failed`, già pronta
-  lato Gateway), `backend/api/main.py`, `backend/database/init.sql`
+- ✅ **Notifica di scatto fallito al backend** — nuovo endpoint
+  `POST /cloud/capture-failed` (e `GET /cloud/failures` per rileggerli),
+  chiamato dal Gateway quando una foto non arriva completa o non viene
+  inoltrata con successo. Salvato come riga nella stessa tabella
+  `acquisitions`, con `capture_status='failed'` e il motivo. **Testato e
+  funzionante.**
+  → `esp32/gateway/main.c` (funzione `notify_capture_failed`),
+  `backend/api/main.py`, `backend/api/db.py`
+- ✅ **Finestra "live" sul Cloud nell'app** — nuova schermata
+  (`CloudLiveActivity`), raggiungibile da un pulsante in Home, che
+  mostra classificazioni e scatti falliti presi al volo dal backend
+  (`/cloud/results` + `/cloud/failures`), senza scaricare o salvare
+  nulla sul telefono - distinta dalla sincronizzazione nella Cronologia
+  (quella scarica davvero le immagini). Primo passo verso l'idea
+  dell'app come "telecomando" del Cloud. **Testato e funzionante.**
+  → `android/.../CloudLiveActivity.java`, `CloudLiveAdapter.java`,
+  `CloudLiveItem.java`, `CloudApiClient.java` (esteso),
+  `activity_cloud_live.xml`, `item_cloud_live_row.xml`,
+  `bg_result_card_error.xml`
+- ⬜ **Azioni da remoto sul Cloud** (idea futura, non ancora iniziata) —
+  dalla finestra live, poter far succedere cose sul Cloud (es. lanciare
+  un attacco adversarial su un'immagine già lì) senza mai scaricarla sul
+  telefono. Richiede anche un nuovo endpoint lato backend, che oggi si
+  aspetta di ricevere l'immagine dal chiamante, non di andarsela a
+  prendere da solo dal proprio dataset/storage.
+  → `backend/api/main.py`, `android/.../CloudLiveActivity.java`
 
 ## Robustezza / gestione errori (trasversale a più pezzi)
 

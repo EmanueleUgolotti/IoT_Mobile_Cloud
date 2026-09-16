@@ -46,6 +46,11 @@
             android:name=".ImageViewerActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
+        
+        <activity
+            android:name=".CloudLiveActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
 
         <service
             android:name=".AdversarialAttackService"

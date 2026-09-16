@@ -14,9 +14,10 @@ import org.json.JSONObject;
 
 /**
  * Client HTTP per il backend Cloud ("api"): scarica immagini dal
- * dataset condiviso (usato per la modalita' 'reference') e legge le
- * classificazioni gia' fatte lato server (usato per sincronizzare i
- * risultati Cloud nella Cronologia dell'app).
+ * dataset condiviso (usato per la modalita' 'reference'), legge le
+ * classificazioni gia' fatte lato server, e i tentativi di scatto
+ * falliti segnalati dal Gateway - usato sia per la sincronizzazione
+ * nella Cronologia, sia per la finestra "live" sul Cloud.
  */
 public class CloudApiClient {
 
@@ -37,31 +38,43 @@ public class CloudApiClient {
         String urlString = baseUrl + "/dataset/image?dataset_id=" + encodedDatasetId
                 + "&image_ref=" + encodedImageRef;
 
-        byte[] response = performGetRaw(urlString);
-        return response;
+        return performGetRaw(urlString);
     }
 
     /**
      * Recupera le ultime classificazioni gia' fatte dal backend Cloud
-     * (endpoint GET /cloud/results), usato per sincronizzarle nella
-     * Cronologia locale dell'app.
+     * (endpoint GET /cloud/results).
      *
-     * @param baseUrl indirizzo del backend api (es. "http://192.168.1.100:8000")
+     * @param baseUrl indirizzo del backend api
      * @param limit   numero massimo di risultati da recuperare
-     * @return l'array JSON grezzo dei risultati (ciascuno con request_id,
-     *         mode, image_ref, dataset_id, predicted_label, probabilities, ecc.)
-     * @throws IOException   se la richiesta di rete fallisce
-     * @throws JSONException se la risposta non e' nel formato atteso
+     * @return l'array JSON grezzo dei risultati
      */
     public static JSONArray fetchRecentResults(String baseUrl, int limit)
             throws IOException, JSONException {
         String urlString = baseUrl + "/cloud/results?limit=" + limit;
-
         byte[] response = performGetRaw(urlString);
         String body = new String(response, StandardCharsets.UTF_8);
-
         JSONObject root = new JSONObject(body);
         return root.getJSONArray("results");
+    }
+
+    /**
+     * Recupera gli ultimi tentativi di scatto falliti, segnalati dal
+     * Gateway (endpoint GET /cloud/failures) - usato dalla finestra
+     * "live" sul Cloud, per mostrare anche gli scatti da rifare, non
+     * solo quelli riusciti.
+     *
+     * @param baseUrl indirizzo del backend api
+     * @param limit   numero massimo di fallimenti da recuperare
+     * @return l'array JSON grezzo dei fallimenti
+     */
+    public static JSONArray fetchRecentFailures(String baseUrl, int limit)
+            throws IOException, JSONException {
+        String urlString = baseUrl + "/cloud/failures?limit=" + limit;
+        byte[] response = performGetRaw(urlString);
+        String body = new String(response, StandardCharsets.UTF_8);
+        JSONObject root = new JSONObject(body);
+        return root.getJSONArray("failures");
     }
 
     private static byte[] performGetRaw(String urlString) throws IOException {

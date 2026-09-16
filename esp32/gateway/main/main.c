@@ -406,15 +406,42 @@ static void handle_offloading_and_forward(const esp_now_packet_t *packet) {
 
 /*
  * Registra un tentativo di scatto fallito (pezzi mancanti, CRC non
- * valido, o inoltro fallito). Per ora solo un log chiaro sul Gateway -
- * notificare il backend (cosi' l'app/Cloud possono mostrare "scatto da
- * rifare") e' un piccolo passo successivo separato, non ancora fatto
- * in questo task (richiede anche una modifica al backend).
+ * valido, o inoltro fallito), e prova a notificarlo al backend Cloud
+ * (solo Cloud, non Mobile - l'app non ha ancora un modo di mostrare
+ * questa informazione, verra' aggiunto in un passo successivo separato).
+ * Il log locale resta comunque sempre scritto, indipendentemente dalla
+ * riuscita della notifica.
  */
 static void notify_capture_failed(uint8_t node_id, uint32_t seq_num, const char *reason) {
-    ESP_LOGW(TAG, "*** SCATTO FALLITO *** nodo=%d seq=%lu - motivo: %s. "
-                  "(la notifica al backend non e' ancora implementata - prossimo task)",
+    ESP_LOGW(TAG, "*** SCATTO FALLITO *** nodo=%d seq=%lu - motivo: %s.",
              node_id, (unsigned long)seq_num, reason);
+
+    if (!is_cloud_reachable()) {
+        ESP_LOGW(TAG, "Impossibile notificare il backend (Cloud non raggiungibile) - "
+                      "il fallimento resta visibile solo in questo log.");
+        return;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "node_id", node_id);
+    cJSON_AddNumberToObject(root, "seq_num", seq_num);
+    cJSON_AddStringToObject(root, "reason", reason);
+    char *json_payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_payload == NULL) {
+        ESP_LOGE(TAG, "Errore nella costruzione del payload di notifica fallimento.");
+        return;
+    }
+
+    bool sent = forward_via_http(CONFIG_BPA_CLOUD_HOST, CONFIG_BPA_CLOUD_PORT,
+                                  "/cloud/capture-failed", json_payload);
+    if (!sent) {
+        ESP_LOGW(TAG, "Notifica del fallimento al backend non riuscita - "
+                      "il fallimento resta visibile solo in questo log.");
+    }
+
+    free(json_payload);
 }
 
 /*

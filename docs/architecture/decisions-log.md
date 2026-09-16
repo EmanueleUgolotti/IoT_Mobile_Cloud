@@ -573,3 +573,10 @@ stesso identico problema di rete/hotspot gia' noto per i pacchetti
 `select() timeout`, ben prima che la dimensione della foto entri in
 gioco), non un difetto legato alla dimensione dei dati o al codice di
 questo task.
+
+## 43 Coda di retry non c'è per le foto fatte dall'acquisition-node
+
+Ci sono due motivi concreti, entrambi legati alla memoria:
+
+La coda è stata creata per un tipo di dato specifico e piccolo: xQueueCreate(RETRY_QUEUE_DEPTH, sizeof(esp_now_packet_t)) — è dimensionata esattamente per il pacchetto reference (76 byte fissi). Una foto vera, una volta ricomposta, è un buffer di dimensione variabile (10-20KB) — non può entrare in una coda pensata per pacchetti piccoli a dimensione fissa.
+Il costo in memoria sarebbe alto: anche costruendo una coda apposta per le foto, ogni "posto" dovrebbe riservare spazio per un'intera foto — con 10 posti come quella attuale, parleremmo di 100-200KB solo per la coda di retry, su un Gateway che ha già mostrato limiti di memoria più volte in questa sessione. È stata una scelta consapevole, già documentata: se l'inoltro di una foto fallisce, per ora viene persa (con log chiaro), non ritentata.

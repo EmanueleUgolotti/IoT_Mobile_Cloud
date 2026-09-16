@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.manu.myapp.AppState;
+import com.manu.myapp.CloudLiveActivity;
 import com.manu.myapp.R;
 import com.manu.myapp.ResultDetailActivity;
 
@@ -61,6 +62,10 @@ public class HomeFragment extends Fragment {
         progressConfidence = view.findViewById(R.id.progressConfidence);
         textLastResultSource = view.findViewById(R.id.textLastResultSource);
         textTapHint = view.findViewById(R.id.textTapHint);
+
+        View buttonCloudLive = view.findViewById(R.id.buttonCloudLive);
+        buttonCloudLive.setOnClickListener(v ->
+                startActivity(new Intent(getActivity(), CloudLiveActivity.class)));
 
         AppState appState = AppState.getInstance();
 

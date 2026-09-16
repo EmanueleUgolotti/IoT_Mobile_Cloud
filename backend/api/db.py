@@ -62,6 +62,27 @@ def insert_captured(payload: CapturedIngestRequest, image_path: str) -> int:
     return _execute_insert(query, values)
 
 
+def insert_capture_failure(node_id: int, seq_num: int, reason: str) -> int:
+    """
+    Registra un tentativo di scatto fallito (segnalato dal Gateway):
+    pezzi mancanti, CRC non valido, o inoltro fallito su entrambe le
+    destinazioni. Non c'e' nessuna immagine associata (mai arrivata
+    completa) - la riga serve solo a dire "qui doveva esserci uno
+    scatto, ma non ce l'ha fatta", cosi' l'app puo' un giorno mostrare
+    "scatto da rifare".
+    """
+    query = """
+        INSERT INTO acquisitions
+            (request_id, mode, node_id, seq_num, gateway_timestamp,
+             capture_status, failure_reason, retry_attempt)
+        VALUES (%s, 'captured', %s, %s, now(), 'failed', %s, 0)
+        RETURNING id;
+    """
+    request_id = f"gw01-node{node_id}-fail{seq_num:06d}"
+    values = (request_id, node_id, seq_num, reason)
+    return _execute_insert(query, values)
+
+
 def update_classification(acquisition_id: int, predicted_label: str, probabilities: dict) -> None:
     """
     Salva il risultato dell'inferenza ML per un'acquisizione gia'
@@ -96,6 +117,30 @@ def get_recent_results(limit: int = 20) -> list[dict]:
                predicted_label, probabilities, received_at, classified_at
         FROM acquisitions
         WHERE predicted_label IS NOT NULL
+        ORDER BY received_at DESC
+        LIMIT %s;
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (limit,))
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+    finally:
+        conn.close()
+
+
+def get_recent_failures(limit: int = 20) -> list[dict]:
+    """
+    Restituisce gli ultimi tentativi di scatto falliti (segnalati dal
+    Gateway), piu' recenti prima.
+    """
+    query = """
+        SELECT id, request_id, node_id, seq_num, failure_reason, received_at
+        FROM acquisitions
+        WHERE capture_status = 'failed'
         ORDER BY received_at DESC
         LIMIT %s;
     """

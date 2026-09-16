@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stessa forma di bg_result_card.xml, ma con bordo del colore di
+     errore (status_error) invece di quello primario - usata per
+     distinguere visivamente i tentativi di scatto falliti nella
+     finestra "live" sul Cloud. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/background_surface" />
+    <corners android:radius="12dp" />
+    <stroke android:width="1.5dp" android:color="@color/status_error" />
+</shape>

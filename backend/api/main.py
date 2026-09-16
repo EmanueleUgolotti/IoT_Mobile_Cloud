@@ -23,7 +23,7 @@ import requests
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 import db
 from models import CapturedIngestRequest, IngestResponse, ReferenceIngestRequest
@@ -42,6 +42,18 @@ CAPTURED_IMAGES_PATH.mkdir(parents=True, exist_ok=True)
 # docker-compose (nome del servizio = hostname, porta interna 8001 -
 # stessa porta usata internamente da robustness-simba, per coerenza).
 ROBUSTNESS_SERVICE_URL = os.environ.get("ROBUSTNESS_SERVICE_URL", "http://robustness:8001")
+
+
+class CaptureFailureRequest(BaseModel):
+    """
+    Notifica dal Gateway: un tentativo di scatto non e' arrivato a buon
+    fine (pezzi mancanti, CRC non valido, o inoltro fallito). Definito
+    qui direttamente (non in models.py) per non rischiare di toccare
+    quel file senza conoscerne il contenuto attuale.
+    """
+    node_id: int
+    seq_num: int
+    reason: str
 
 
 def check_auth(x_api_key: str | None):
@@ -157,6 +169,31 @@ async def get_results(limit: int = 20):
     # I timestamp (datetime) e il campo probabilities (gia' un dict
     # grazie a JSONB) sono serializzati automaticamente da FastAPI.
     return {"results": results}
+
+
+@app.post("/cloud/capture-failed")
+async def capture_failed(payload: CaptureFailureRequest, x_api_key: str | None = Header(default=None)):
+    """
+    Il Gateway chiama questo endpoint quando un tentativo di scatto non
+    e' arrivato a buon fine (pezzi mancanti, CRC non valido, o inoltro
+    fallito su entrambe le destinazioni) - salva solo un riferimento
+    (nessuna immagine, non e' mai arrivata completa), cosi' in futuro
+    l'app potra' mostrare "scatto da rifare".
+    """
+    check_auth(x_api_key)
+
+    stored_id = db.insert_capture_failure(payload.node_id, payload.seq_num, payload.reason)
+    return {"status": "ok", "stored_id": stored_id}
+
+
+@app.get("/cloud/failures")
+async def get_failures(limit: int = 20):
+    """
+    Restituisce gli ultimi tentativi di scatto falliti, piu' recenti
+    prima - controparte di /cloud/results per i fallimenti.
+    """
+    failures = db.get_recent_failures(limit=limit)
+    return {"failures": failures}
 
 
 @app.get("/health")

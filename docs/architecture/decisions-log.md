@@ -580,3 +580,112 @@ Ci sono due motivi concreti, entrambi legati alla memoria:
 
 La coda è stata creata per un tipo di dato specifico e piccolo: xQueueCreate(RETRY_QUEUE_DEPTH, sizeof(esp_now_packet_t)) — è dimensionata esattamente per il pacchetto reference (76 byte fissi). Una foto vera, una volta ricomposta, è un buffer di dimensione variabile (10-20KB) — non può entrare in una coda pensata per pacchetti piccoli a dimensione fissa.
 Il costo in memoria sarebbe alto: anche costruendo una coda apposta per le foto, ogni "posto" dovrebbe riservare spazio per un'intera foto — con 10 posti come quella attuale, parleremmo di 100-200KB solo per la coda di retry, su un Gateway che ha già mostrato limiti di memoria più volte in questa sessione. È stata una scelta consapevole, già documentata: se l'inoltro di una foto fallisce, per ora viene persa (con log chiaro), non ritentata.
+
+## 46. Docker Swarm - dimostrazione di scalabilità
+ 
+Implementato come "prova di concetto" dell'estensione opzionale già
+segnata in roadmap: mostrare concretamente come il sistema scalerebbe
+in un contesto con più macchine, senza dover davvero procurarsi altro
+hardware fisico.
+ 
+**Decisione principale**: un file separato (`docker-stack.yml`),
+non una modifica al `docker-compose.yml` usato per lo sviluppo
+quotidiano - che resta identico e invariato. Le differenze principali
+rispetto a Compose:
+- Nessun `build:` - Swarm richiede immagini gia' costruite
+  (`docker build` fatto a mano, una volta, prima del deploy), non le
+  costruisce al volo.
+- `deploy.replicas` e `deploy.restart_policy` sostituiscono alcune
+  opzioni di runtime di Compose - `replicas: 1` in questa demo, ma e'
+  il punto esatto dove si scriverebbe un numero piu' alto per scalare
+  davvero, con altre macchine collegate allo stesso Swarm
+  (`docker swarm join`).
+**Limite noto, osservato e documentato nei commenti del file**: Swarm
+non aspetta un healthcheck prima di avviare un servizio dipendente,
+a differenza di Compose (che con `depends_on: condition:
+service_healthy` aspetta davvero che `robustness` sia pronto prima di
+avviare `robustness-simba`). Confermato in pratica durante il test:
+`docker stack services` mostrava `robustness` a `0/1` per una decina di
+secondi (tempo di caricamento del modello VGG16), poi `1/1` - un
+comportamento diverso, piu' "grezzo", da quello di Compose.
+ 
+**Un piccolo inciampo pratico durante il test**: `curl -v
+http://localhost:8000/health` sembrava non rispondere affatto - in
+realta' si stava connettendo su `::1` (IPv6), mentre il routing delle
+porte di Swarm su quel sistema specifico rispondeva solo su IPv4.
+Risolto forzando IPv4 esplicitamente (`curl -4 ...`) - non un problema
+del backend (i log confermavano che Uvicorn era gia' partito
+correttamente), solo una particolarita' di rete locale.
+ 
+**Testato con successo**: build delle tre immagini (`bpa-api`,
+`bpa-robustness`, `bpa-robustness-simba`), `docker swarm init`
+(richiesto `--advertise-addr 127.0.0.1` per un errore di scelta
+automatica dell'indirizzo, dato che il PC ha piu' interfacce di rete),
+`docker stack deploy`, tutti e 4 i servizi arrivati a `1/1` repliche,
+applicazione raggiungibile e funzionante.
+
+## 47. Causa profonda trovata: il Gateway bloccava sé stesso durante l'inoltro
+ 
+Dopo diversi tentativi di correzione mirati (pausa di assestamento,
+tentativi extra, seq_num basati sul tempo), le foto catturate
+continuavano a non arrivare quasi mai a Cloud/app, mentre i pacchetti
+`reference` funzionavano quasi sempre - nonostante usassero lo stesso
+identico codice di inoltro. La chiave per isolare la causa vera e'
+stata l'osservazione dell'utente: "i reference passano quasi sempre,
+le foto quasi mai" - un indizio che il problema non fosse la rete in
+se', ma qualcosa di specifico al percorso delle foto.
+ 
+**Causa reale, confermata dai log**: la funzione che riceve i
+pacchetti radio ESP-NOW chiamava l'inoltro HTTP DIRETTAMENTE, in modo
+bloccante - per una foto, con tentativi extra e pause, questo blocco
+poteva durare 30-40 secondi filati. Per tutto quel tempo, lo stack di
+rete di sistema (che tiene viva la connessione WiFi) restava congelato,
+incapace di fare la sua manutenzione normale - risultato osservato:
+OGNI tentativo di connessione (anche il semplice controllo "il Cloud e'
+raggiungibile?") falliva per l'intera durata del blocco, apparendo
+come "la rete non funziona", quando in realta' era il Gateway stesso
+a essersi bloccato il respiro. I pacchetti `reference` (un solo
+tentativo veloce, blocco breve) soffrivano molto meno per lo stesso
+motivo, ma non ne erano immuni.
+ 
+**Correzione**: la ricezione radio ora si limita a mettere la
+richiesta in una coda e torna subito libera - un task dedicato,
+separato, si occupa con calma dell'inoltro vero, per entrambi i tipi
+di pacchetto (`reference` e foto catturate, un solo task condiviso,
+non due separati - vedi sezione 48 sul perche').
+ 
+## 48. Revisione del codice: due correzioni aggiuntive prima del test finale
+ 
+Prima di testare la correzione sopra, il codice e' stato sottoposto a
+una revisione esterna (da una persona diversa dall'assistente), che ha
+sollevato tre osservazioni. Valutate una per una con onesta':
+ 
+1. **"Un solo task invece di due separati"** - accolta. Non tanto per
+   risparmiare risorse (il Gateway ha RAM abbondante), quanto perche'
+   ha fatto notare una dimenticanza vera: l'inoltro dei pacchetti
+   `reference` continuava a girare bloccante dentro la ricezione radio,
+   lo stesso difetto appena corretto ma solo per le foto. Unificato in
+   un solo task/coda condivisa, che gestisce entrambi i tipi.
+2. **Race condition tra la ricezione radio e il task di controllo
+   timeout** (`reassembly_timeout_task`), che leggono/scrivono le
+   stesse variabili globali di stato della ricomposizione senza nessuna
+   protezione - accolta, la piu' seria delle tre. Aggiunto un mutex
+   (`s_reassembly_mutex`) attorno a tutto lo stato condiviso, preso da
+   entrambe le parti prima di toccarlo. Attenzione aggiuntiva: le
+   chiamate di rete dentro `notify_capture_failed` sono state spostate
+   per avvenire sempre DOPO aver rilasciato il mutex, per non tenerlo
+   bloccato piu' del necessario.
+3. **La coda di inoltro potrebbe riempirsi** se piu' foto complete
+   arrivassero mentre una precedente e' ancora in fase di tentativi
+   (fino a 30-40 secondi) - osservazione corretta nei fatti, ma
+   valutata a bassa priorita': il caso e' gia' gestito in modo sicuro
+   (log chiaro + notifica di fallimento, nessuna perdita silenziosa,
+   nessun crash), e con l'uso reale previsto (scatti manuali, non un
+   flusso continuo) e' un rischio remoto. Aumentata comunque la
+   capacita' della coda (da 2 a 4 posti) come margine di sicurezza
+   economico.
+**Risultato finale**: testato con successo un ciclo completo
+end-to-end (scatto -> conversione -> frammentazione -> invio radio ->
+ricezione -> ricomposizione -> verifica CRC -> inoltro riuscito sia a
+Cloud sia a Mobile), confermato dall'utente. Capitolo della
+frammentazione/ricezione delle foto vere considerato chiuso.

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import requests
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from pydantic import BaseModel, ValidationError
 
@@ -196,9 +196,194 @@ async def get_failures(limit: int = 20):
     return {"failures": failures}
 
 
+# Pagina minimale, senza framework ne' stile particolare - serve solo a
+# dimostrare visivamente che il Cloud funziona, senza dover usare
+# l'app o il terminale. Nessun requisito di grafica: tabelle semplici,
+# JavaScript puro (fetch), nessuna libreria esterna.
+DASHBOARD_HTML = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>BPA Cloud - Dashboard</title>
+<style>
+    body { font-family: sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 14px; }
+    th { background: #eee; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 16px; margin-top: 30px; }
+    .failed-row { background: #fdd; }
+    button { padding: 6px 14px; margin-bottom: 15px; }
+    #modal-overlay {
+        display: none; position: fixed; top: 0; left: 0;
+        width: 100%; height: 100%; background: rgba(0,0,0,0.7);
+        align-items: center; justify-content: center;
+    }
+    #modal-box {
+        background: #fff; padding: 20px; max-width: 600px;
+        max-height: 90%; overflow: auto; border-radius: 4px;
+    }
+    #modal-image { max-width: 100%; display: block; margin-bottom: 15px; }
+    #modal-probs { padding-left: 20px; }
+    #modal-probs li.top-prediction { font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>BPA Cloud - Dashboard</h1>
+<button onclick="loadAll()">Aggiorna</button>
+
+<h2>Classificazioni (/cloud/results)</h2>
+<table id="results-table">
+    <thead>
+        <tr>
+            <th>Immagine</th><th>ID</th><th>Request ID</th><th>Modalita'</th><th>Riferimento</th>
+            <th>Classe</th><th>Ricevuto</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<h2>Scatti falliti (/cloud/failures)</h2>
+<table id="failures-table">
+    <thead>
+        <tr><th>ID</th><th>Request ID</th><th>Nodo</th><th>Seq</th><th>Motivo</th><th>Ricevuto</th></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Riquadro di dettaglio: immagine ingrandita + probabilita' complete
+     per ogni classe - si apre cliccando sulla miniatura di una riga. -->
+<div id="modal-overlay" onclick="if (event.target === this) closeModal()">
+    <div id="modal-box">
+        <button onclick="closeModal()">Chiudi</button>
+        <img id="modal-image" src="" alt="Immagine ingrandita">
+        <h3>Probabilita' per classe</h3>
+        <ul id="modal-probs"></ul>
+    </div>
+</div>
+
+<script>
+let lastResults = [];
+
+async function loadResults() {
+    const res = await fetch('/cloud/results?limit=50');
+    const data = await res.json();
+    lastResults = data.results;
+
+    const tbody = document.querySelector('#results-table tbody');
+    tbody.innerHTML = '';
+    for (const r of data.results) {
+        const ref = r.image_ref || r.capture_id || '-';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><img src="/cloud/results/${r.id}/image" style="max-width:70px;max-height:70px;cursor:pointer;" onclick="showDetails(${r.id})" onerror="this.style.display='none'"></td>
+                        <td>${r.id}</td><td>${r.request_id}</td><td>${r.mode}</td>
+                        <td>${ref}</td><td>${r.predicted_label || '-'}</td>
+                        <td>${r.received_at || '-'}</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function showDetails(id) {
+    const r = lastResults.find(x => x.id === id);
+    if (!r) return;
+
+    document.getElementById('modal-image').src = `/cloud/results/${id}/image`;
+
+    const probsList = document.getElementById('modal-probs');
+    probsList.innerHTML = '';
+    if (r.probabilities) {
+        const entries = Object.entries(r.probabilities).sort((a, b) => b[1] - a[1]);
+        for (const [label, prob] of entries) {
+            const li = document.createElement('li');
+            const pct = (prob * 100).toFixed(1);
+            li.textContent = `${label}: ${pct}%`;
+            if (label === r.predicted_label) {
+                li.className = 'top-prediction';
+            }
+            probsList.appendChild(li);
+        }
+    } else {
+        probsList.innerHTML = "<li>Nessuna probabilita' disponibile</li>";
+    }
+
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+}
+
+async function loadFailures() {
+    const res = await fetch('/cloud/failures?limit=50');
+    const data = await res.json();
+    const tbody = document.querySelector('#failures-table tbody');
+    tbody.innerHTML = '';
+    for (const f of data.failures) {
+        const tr = document.createElement('tr');
+        tr.className = 'failed-row';
+        tr.innerHTML = `<td>${f.id}</td><td>${f.request_id}</td><td>${f.node_id}</td>
+                        <td>${f.seq_num}</td><td>${f.failure_reason}</td>
+                        <td>${f.received_at || '-'}</td>`;
+        tbody.appendChild(tr);
+    }
+}
+
+function loadAll() {
+    loadResults();
+    loadFailures();
+}
+
+loadAll();
+</script>
+
+</body>
+</html>
+"""
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    """
+    Pagina web minimale che mostra i dati del Cloud (classificazioni e
+    scatti falliti) senza bisogno del telefono - serve solo a
+    dimostrare visivamente che il sistema funziona. Riusa gli stessi
+    endpoint gia' esistenti (/cloud/results, /cloud/failures) tramite
+    JavaScript nel browser, nessuna nuova logica sul backend.
+    """
+    return HTMLResponse(content=DASHBOARD_HTML)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/cloud/results/{acquisition_id}/image")
+async def get_result_image(acquisition_id: int):
+    """
+    Serve l'immagine associata a una riga di /cloud/results, sia che
+    sia una foto vera catturata (gia' salvata su disco, percorso in
+    image_path) sia un riferimento al dataset condiviso (stesso file
+    usato anche dall'app) - un solo endpoint per entrambi i casi, cosi'
+    la dashboard puo' mostrare una miniatura senza doversi preoccupare
+    di quale dei due tipi sia.
+    """
+    row = db.get_acquisition_by_id(acquisition_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Acquisition {acquisition_id} not found")
+
+    if row["mode"] == "captured":
+        if not row["image_path"]:
+            raise HTTPException(status_code=404, detail="No image stored for this capture")
+        image_path = Path(row["image_path"])
+    else:  # reference
+        image_path = DATASET_PATH / row["dataset_id"] / row["image_ref"]
+
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image file not found on disk")
+
+    return FileResponse(image_path)
 
 
 @app.get("/dataset/image")

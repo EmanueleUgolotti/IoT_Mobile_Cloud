@@ -1,0 +1,104 @@
+# Stack file per Docker Swarm - versione "dimostrativa" del sistema,
+# pensata per mostrare COME il progetto scalerebbe in un contesto reale
+# con più macchine, anche se qui gira su un solo PC ("swarm a un nodo").
+#
+# Differenze rispetto a docker-compose.yml (che resta il file usato per
+# lo sviluppo quotidiano, invariato):
+#
+# 1. Niente "build:" - Swarm vuole immagini GIA' COSTRUITE (vedi i
+#    comandi "docker build" nelle istruzioni), non le costruisce al
+#    volo come fa "docker compose up".
+#
+# 2. "deploy:" sostituisce alcune opzioni di Compose - qui usato solo
+#    per "restart_policy" (riavvia da solo se un container va in
+#    crash) e "replicas" (quante copie far girare - tutte a 1 in
+#    questa demo, ma è il punto dove si scriverebbe un numero più alto
+#    per scalare davvero, con più macchine collegate allo Swarm).
+#
+# 3. LIMITE NOTO (da spiegare a voce, non risolto qui): Swarm non
+#    aspetta un healthcheck prima di avviare un servizio dipendente,
+#    a differenza di "docker compose up" (che con
+#    "depends_on: condition: service_healthy" aspetta davvero che
+#    "robustness" sia pronto prima di avviare "robustness-simba").
+#    In Swarm, "robustness-simba" potrebbe partire prima che
+#    "robustness" abbia finito di caricare il modello - accettabile per
+#    una demo (il servizio si riprenderebbe comunque, dato il
+#    "restart_policy: on-failure"), ma diverso dal comportamento più
+#    "sorvegliato" di Compose.
+version: "3.9"
+
+services:
+  api:
+    image: bpa-api:latest
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: bpa
+      DB_USER: bpa
+      DB_PASSWORD: bpa
+      AUTH_ENABLED: "false"
+      API_KEY: "changeme"
+      DATASET_PATH: /data/dataset
+      CAPTURED_IMAGES_PATH: /data/captured
+      ROBUSTNESS_SERVICE_URL: "http://robustness:8001"
+    volumes:
+      - ../data/dataset:/data/dataset:ro
+      - ../data/captured:/data/captured
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bpa
+      POSTGRES_USER: bpa
+      POSTGRES_PASSWORD: bpa
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ../backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  robustness:
+    image: bpa-robustness:latest
+    ports:
+      - "8001:8001"
+    environment:
+      AUTH_ENABLED: "false"
+      API_KEY: "changeme"
+      SIMBA_SERVICE_URL: "http://robustness-simba:8001"
+    volumes:
+      - ../models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  robustness-simba:
+    image: bpa-robustness-simba:latest
+    ports:
+      - "8002:8001"
+    environment:
+      AUTH_ENABLED: "false"
+      API_KEY: "changeme"
+      TF_SERVICE_URL: "http://robustness:8001"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  db_data:

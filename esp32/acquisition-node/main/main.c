@@ -316,7 +316,12 @@ static void capture_photo_on_demand(void) {
     // ma il task di anteprima resta SOSPESO (non solo bloccato dal
     // mutex) per tutta la trasmissione - vedi nota sopra sul crash
     // residuo osservato proprio in questa finestra.
+    // Stesso motivo della modalita' reference: non partire da 0, per
+    // evitare di ripetere un request_id gia' usato in un boot precedente.
     static uint32_t s_captured_seq_num = 0;
+    if (s_captured_seq_num == 0) {
+        s_captured_seq_num = (uint32_t)(esp_timer_get_time() / 1000);
+    }
     send_captured_photo(jpg_buf, jpg_len, s_captured_seq_num++);
 
     free(jpg_buf);
@@ -379,6 +384,13 @@ static void on_boot_long_press(void *button_handle, void *usr_data) {
  * "raffreddamento" tra uno scatto completato e la richiesta successiva
  * - non elimina il rischio alla radice, ma lo rende molto meno
  * probabile dando al sistema il tempo di stabilizzarsi.
+ *
+ * NOTA (ritardo iniziale rimosso su richiesta): era stato anche
+ * osservato che il primo scatto, se fatto entro 10-15 secondi
+ * dall'accensione, crashava piu' spesso - era stato aggiunto un blocco
+ * automatico dei primi 15 secondi, poi rimosso per preferenza
+ * dell'utente. Se necessario, resta buona norma aspettare qualche
+ * secondo dopo l'accensione prima del primo scatto.
  */
 #define CAPTURE_COOLDOWN_MS 3000
 
@@ -658,7 +670,16 @@ static void send_reference_packet(uint32_t seq_num, const char *image_ref) {
  * callback dei pulsanti sopra, non da un polling qui dentro.
  */
 static void acquisition_loop_task(void *pvParameters) {
-    uint32_t seq_num = 0;
+    // NON si parte da 0: il database del backend ricorda tutti i
+    // request_id gia' visti, anche tra un riavvio della scheda e
+    // l'altro - se il contatore ripartisse sempre da zero, un pacchetto
+    // "numero zero" di oggi avrebbe lo stesso identico request_id di
+    // un "numero zero" di ieri, venendo rifiutato per sempre come
+    // duplicato (osservato: un pacchetto bloccato in retry all'infinito
+    // con errore "UniqueViolation" dal database). Si parte invece da un
+    // numero legato al tempo trascorso dall'accensione - stesso trucco
+    // gia' usato con successo per il pacchetto di selftest del Gateway.
+    uint32_t seq_num = (uint32_t)(esp_timer_get_time() / 1000);
     size_t image_index = 0;
 
     // Se configurata, questa singola immagine viene mandata sempre,

@@ -451,6 +451,37 @@ static void notify_capture_failed(uint8_t node_id, uint32_t seq_num, const char 
  * fallimento NON viene accodata per un retry (richiederebbe conservare
  * l'intero buffer immagine) - viene solo segnalata come fallita.
  */
+/*
+ * Inoltra una foto vera, gia' ricomposta e verificata, usando la stessa
+ * logica di offloading dei pacchetti 'reference' (Cloud prima, Mobile
+ * come riserva). A differenza dei pacchetti 'reference', in caso di
+ * fallimento NON viene accodata per un retry 30 secondi dopo
+ * (richiederebbe conservare l'intero buffer immagine per tutto quel
+ * tempo) - ma, dato che il buffer e' comunque gia' in memoria in questo
+ * istante, vale la pena riprovare subito un paio di volte con una
+ * breve pausa, prima di arrendersi - un compromesso economico che non
+ * richiede nessuna coda, e recupera i fallimenti piu' brevi/transitori
+ * (osservato: la stessa instabilita' di rete che sui pacchetti
+ * 'reference' viene assorbita dal retry a 30 secondi, sulle foto
+ * catturate falliva sempre al primo colpo, senza nessuna seconda
+ * possibilita').
+ *
+ * OSSERVAZIONE SUCCESSIVA: i pacchetti 'reference' (un solo pacchetto
+ * ESP-NOW) arrivano quasi sempre a destinazione, mentre le foto
+ * catturate (40-50 pacchetti ESP-NOW in rapida successione, per la
+ * frammentazione) falliscono quasi sempre il PRIMO tentativo - stesso
+ * fenomeno gia' diagnosticato sull'Acquisition Node: ESP-NOW e WiFi
+ * condividono la stessa antenna, e una raffica intensa di ricezione
+ * radio puo' disturbare temporaneamente la connessione WiFi, proprio
+ * nel momento in cui si tenta di aprire una connessione HTTP subito
+ * dopo. Per questo, prima ancora del primo tentativo (non solo tra un
+ * retry e l'altro), si aspetta un breve momento per dare tempo alla
+ * radio di stabilizzarsi dopo la raffica di ricezione appena conclusa.
+ */
+#define CAPTURED_PHOTO_IMMEDIATE_RETRIES 2
+#define CAPTURED_PHOTO_RETRY_DELAY_MS 2000
+#define CAPTURED_PHOTO_SETTLE_DELAY_MS 800
+
 static void forward_captured_photo(uint8_t node_id, uint32_t seq_num,
                                     const uint8_t *jpeg_data, size_t jpeg_len) {
     char request_id[32];
@@ -463,23 +494,89 @@ static void forward_captured_photo(uint8_t node_id, uint32_t seq_num,
         return;
     }
 
+    // Pausa "di assestamento" prima del primo tentativo - vedi nota sopra.
+    vTaskDelay(pdMS_TO_TICKS(CAPTURED_PHOTO_SETTLE_DELAY_MS));
+
     bool sent = false;
 
-    if (is_cloud_reachable()) {
-        ESP_LOGI(TAG, "Cloud raggiungibile - inoltro foto catturata verso Cloud");
-        sent = forward_via_http(CONFIG_BPA_CLOUD_HOST, CONFIG_BPA_CLOUD_PORT,
-                                 "/cloud/ingest", json_payload);
-    } else {
-        ESP_LOGI(TAG, "Cloud non raggiungibile - inoltro foto catturata verso Mobile (riserva)");
-        sent = forward_via_http(CONFIG_BPA_MOBILE_HOST, CONFIG_BPA_MOBILE_PORT,
-                                 "/mobile/ingest", json_payload);
+    for (int attempt = 0; attempt <= CAPTURED_PHOTO_IMMEDIATE_RETRIES && !sent; attempt++) {
+        if (attempt > 0) {
+            ESP_LOGW(TAG, "Nuovo tentativo immediato %d/%d per la foto catturata...",
+                     attempt, CAPTURED_PHOTO_IMMEDIATE_RETRIES);
+            vTaskDelay(pdMS_TO_TICKS(CAPTURED_PHOTO_RETRY_DELAY_MS));
+        }
+
+        if (is_cloud_reachable()) {
+            ESP_LOGI(TAG, "Cloud raggiungibile - inoltro foto catturata verso Cloud");
+            sent = forward_via_http(CONFIG_BPA_CLOUD_HOST, CONFIG_BPA_CLOUD_PORT,
+                                     "/cloud/ingest", json_payload);
+        } else {
+            ESP_LOGI(TAG, "Cloud non raggiungibile - inoltro foto catturata verso Mobile (riserva)");
+            sent = forward_via_http(CONFIG_BPA_MOBILE_HOST, CONFIG_BPA_MOBILE_PORT,
+                                     "/mobile/ingest", json_payload);
+        }
     }
 
     if (!sent) {
-        notify_capture_failed(node_id, seq_num, "inoltro fallito su entrambe le destinazioni");
+        notify_capture_failed(node_id, seq_num, "inoltro fallito su entrambe le destinazioni "
+                                                  "(dopo i tentativi immediati)");
     }
 
     free(json_payload);
+}
+
+/*
+ * OSSERVAZIONE IMPORTANTE (causa del problema "le foto non arrivano
+ * mai, i reference sì"): la funzione che riceve i pacchetti radio
+ * ESP-NOW chiamava finora l'inoltro HTTP DIRETTAMENTE, in modo
+ * bloccante - per una foto, con i tentativi extra e le pause, questo
+ * blocco puo' durare fino a 30-40 secondi filati. Per tutto quel
+ * tempo, lo stack di rete di sistema (che tiene viva la connessione
+ * WiFi) resta congelato, incapace di fare la sua manutenzione normale
+ * - il risultato osservato: ogni tentativo di connessione (anche il
+ * semplice controllo "il Cloud e' raggiungibile?") falliva per l'
+ * intera durata del blocco, apparendo come "la rete non funziona",
+ * quando in realta' era il Gateway stesso a essersi bloccato il
+ * respiro. I pacchetti 'reference' (un solo tentativo veloce)
+ * soffrivano molto meno per lo stesso motivo, ma non erano immuni -
+ * anche il loro inoltro girava (e girerebbe, se non corretto anche
+ * per loro) direttamente dentro la ricezione radio.
+ *
+ * Soluzione: la ricezione radio ora si limita a "passare il testimone"
+ * (mette la richiesta in una coda) e torna subito libera - UN SOLO
+ * task dedicato si occupa con calma dell'inoltro vero, sia per i
+ * pacchetti 'reference' sia per le foto catturate (un solo task invece
+ * di due separati, dato che i due tipi non necessitano di essere
+ * gestiti in parallelo tra loro).
+ */
+typedef enum {
+    FORWARD_REQUEST_REFERENCE,
+    FORWARD_REQUEST_CAPTURED,
+} forward_request_type_t;
+
+typedef struct {
+    forward_request_type_t type;
+    esp_now_packet_t reference_packet; // valido solo se type == FORWARD_REQUEST_REFERENCE
+    uint8_t node_id;                   // valido solo se type == FORWARD_REQUEST_CAPTURED
+    uint32_t seq_num;                  // valido solo se type == FORWARD_REQUEST_CAPTURED
+    uint8_t *buffer;                   // valido solo se type == FORWARD_REQUEST_CAPTURED
+    uint32_t size;                     // valido solo se type == FORWARD_REQUEST_CAPTURED
+} forward_request_t;
+
+static QueueHandle_t s_forward_queue;
+
+static void forward_task(void *pvParameters) {
+    forward_request_t req;
+    for (;;) {
+        if (xQueueReceive(s_forward_queue, &req, portMAX_DELAY) == pdTRUE) {
+            if (req.type == FORWARD_REQUEST_REFERENCE) {
+                handle_offloading_and_forward(&req.reference_packet);
+            } else {
+                forward_captured_photo(req.node_id, req.seq_num, req.buffer, req.size);
+                free(req.buffer);
+            }
+        }
+    }
 }
 
 /* ---------- Ricezione e ricomposizione di foto frammentate ----------
@@ -487,6 +584,14 @@ static void forward_captured_photo(uint8_t node_id, uint32_t seq_num,
  * Acquisition Node, che ha un raffreddamento tra uno scatto e l'altro
  * e non ne manda mai due in parallelo).
  */
+
+// Protegge tutto lo stato di ricomposizione qui sotto: e' letto/
+// scritto sia dalla ricezione radio (handle_frag_header/handle_frag_data)
+// sia dal task indipendente di controllo timeout (reassembly_timeout_task)
+// - senza questo mutex, i due potrebbero toccare le stesse variabili
+// nello stesso istante (es. il timeout libera la memoria mentre un
+// frammento ci sta ancora scrivendo dentro), causando corruzione.
+static SemaphoreHandle_t s_reassembly_mutex;
 
 static uint8_t *s_reassembly_buffer = NULL;
 static bool *s_reassembly_fragment_received = NULL;
@@ -521,14 +626,21 @@ static void free_reassembly_state(void) {
 }
 
 static void handle_frag_header(const esp_now_frag_packet_t *packet) {
+    xSemaphoreTake(s_reassembly_mutex, portMAX_DELAY);
+
+    bool overwrite_failed_prev = false;
+    uint8_t prev_node_id = 0;
+    uint32_t prev_seq_num = 0;
+
     if (reassembly_in_progress()) {
         ESP_LOGW(TAG, "Nuova foto in arrivo (nodo=%d seq=%lu) mentre la precedente "
                       "(nodo=%d seq=%lu) non era completa (%u/%u frammenti).",
                  packet->node_id, (unsigned long)packet->seq_num,
                  s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
                  s_reassembly_fragments_received_count, s_reassembly_total_fragments);
-        notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
-                               "sovrascritta da un nuovo scatto prima di completarsi");
+        overwrite_failed_prev = true;
+        prev_node_id = s_reassembly_node_id;
+        prev_seq_num = s_reassembly_seq_num;
         free_reassembly_state();
     }
 
@@ -537,6 +649,11 @@ static void handle_frag_header(const esp_now_frag_packet_t *packet) {
 
     if (total_size == 0 || total_fragments == 0) {
         ESP_LOGW(TAG, "Intestazione non valida (dimensione o numero frammenti a zero) - ignorata.");
+        xSemaphoreGive(s_reassembly_mutex);
+        if (overwrite_failed_prev) {
+            notify_capture_failed(prev_node_id, prev_seq_num,
+                                   "sovrascritta da un nuovo scatto prima di completarsi");
+        }
         return;
     }
 
@@ -544,6 +661,11 @@ static void handle_frag_header(const esp_now_frag_packet_t *packet) {
     if (s_reassembly_buffer == NULL) {
         ESP_LOGE(TAG, "Impossibile allocare %lu byte per la ricomposizione della foto.",
                  (unsigned long)total_size);
+        xSemaphoreGive(s_reassembly_mutex);
+        if (overwrite_failed_prev) {
+            notify_capture_failed(prev_node_id, prev_seq_num,
+                                   "sovrascritta da un nuovo scatto prima di completarsi");
+        }
         notify_capture_failed(packet->node_id, packet->seq_num, "memoria insufficiente sul Gateway");
         return;
     }
@@ -553,9 +675,15 @@ static void handle_frag_header(const esp_now_frag_packet_t *packet) {
         ESP_LOGE(TAG, "Impossibile allocare la mappa dei frammenti.");
         free(s_reassembly_buffer);
         s_reassembly_buffer = NULL;
+        xSemaphoreGive(s_reassembly_mutex);
+        if (overwrite_failed_prev) {
+            notify_capture_failed(prev_node_id, prev_seq_num,
+                                   "sovrascritta da un nuovo scatto prima di completarsi");
+        }
         notify_capture_failed(packet->node_id, packet->seq_num, "memoria insufficiente sul Gateway");
         return;
     }
+
 
     s_reassembly_total_size = total_size;
     s_reassembly_total_fragments = total_fragments;
@@ -568,18 +696,29 @@ static void handle_frag_header(const esp_now_frag_packet_t *packet) {
     ESP_LOGI(TAG, "Ricezione foto iniziata (nodo=%d seq=%lu): %lu byte attesi, %u frammenti.",
              packet->node_id, (unsigned long)packet->seq_num,
              (unsigned long)total_size, total_fragments);
+
+    xSemaphoreGive(s_reassembly_mutex);
+
+    if (overwrite_failed_prev) {
+        notify_capture_failed(prev_node_id, prev_seq_num,
+                               "sovrascritta da un nuovo scatto prima di completarsi");
+    }
 }
 
 static void handle_frag_data(const esp_now_frag_packet_t *packet) {
+    xSemaphoreTake(s_reassembly_mutex, portMAX_DELAY);
+
     if (!reassembly_in_progress()) {
         ESP_LOGW(TAG, "Frammento ricevuto (nodo=%d seq=%lu) senza un'intestazione "
                       "precedente - scartato.",
                  packet->node_id, (unsigned long)packet->seq_num);
+        xSemaphoreGive(s_reassembly_mutex);
         return;
     }
 
     if (packet->node_id != s_reassembly_node_id || packet->seq_num != s_reassembly_seq_num) {
         ESP_LOGW(TAG, "Frammento di uno scatto diverso da quello in corso - scartato.");
+        xSemaphoreGive(s_reassembly_mutex);
         return;
     }
 
@@ -589,12 +728,14 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
     if (index >= s_reassembly_total_fragments) {
         ESP_LOGW(TAG, "Indice frammento fuori range (%u, attesi max %u) - scartato.",
                  index, s_reassembly_total_fragments);
+        xSemaphoreGive(s_reassembly_mutex);
         return;
     }
 
     size_t offset = (size_t)index * FRAGMENT_DATA_SIZE;
     if (offset + len > s_reassembly_total_size) {
         ESP_LOGW(TAG, "Frammento %u fuori dai limiti del buffer della foto - scartato.", index);
+        xSemaphoreGive(s_reassembly_mutex);
         return;
     }
 
@@ -606,6 +747,7 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
     }
 
     if (s_reassembly_fragments_received_count < s_reassembly_total_fragments) {
+        xSemaphoreGive(s_reassembly_mutex);
         return; // ancora incompleta, aspetta altri frammenti
     }
 
@@ -619,16 +761,61 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
         ESP_LOGI(TAG, "Foto ricomposta con successo (nodo=%d seq=%lu): %lu byte, CRC verificato.",
                  s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
                  (unsigned long)s_reassembly_total_size);
-        forward_captured_photo(s_reassembly_node_id, s_reassembly_seq_num,
-                                s_reassembly_buffer, s_reassembly_total_size);
+
+        // IMPORTANTE: "scolleghiamo" il buffer dallo stato globale PRIMA
+        // di chiamare l'inoltro (che ora, con i tentativi immediati con
+        // pausa, puo' richiedere piu' del timeout di ricomposizione) -
+        // altrimenti il task di controllo timeout vede ancora una
+        // ricomposizione "in corso" e la dichiara erroneamente scaduta,
+        // anche se in realta' e' gia' completa da tempo e sta solo
+        // aspettando l'inoltro. Il buffer resta valido (non liberato),
+        // solo non piu' visibile come "ricomposizione in corso".
+        uint8_t local_node_id = s_reassembly_node_id;
+        uint32_t local_seq_num = s_reassembly_seq_num;
+        uint8_t *local_buffer = s_reassembly_buffer;
+        uint32_t local_size = s_reassembly_total_size;
+
+        s_reassembly_buffer = NULL; // reassembly_in_progress() torna false da qui in poi
+        free(s_reassembly_fragment_received);
+        s_reassembly_fragment_received = NULL;
+        s_reassembly_total_size = 0;
+        s_reassembly_total_fragments = 0;
+        s_reassembly_fragments_received_count = 0;
+
+        xSemaphoreGive(s_reassembly_mutex);
+
+        // NON chiamiamo forward_captured_photo() direttamente da qui -
+        // questa funzione gira nel contesto della ricezione radio
+        // ESP-NOW, e l'inoltro HTTP (con i suoi tentativi e pause) puo'
+        // durare decine di secondi - bloccarla qui congelerebbe anche
+        // la ricezione radio e lo stack di rete per tutto quel tempo
+        // (causa gia' identificata di molti fallimenti misteriosi).
+        // Passiamo la richiesta al task condiviso di inoltro tramite la
+        // coda, e torniamo subito liberi.
+        forward_request_t forward_req = {
+            .type = FORWARD_REQUEST_CAPTURED,
+            .node_id = local_node_id,
+            .seq_num = local_seq_num,
+            .buffer = local_buffer,
+            .size = local_size,
+        };
+        if (xQueueSend(s_forward_queue, &forward_req, 0) != pdTRUE) {
+            ESP_LOGE(TAG, "Coda di inoltro piena - scatto perso (nodo=%d seq=%lu).",
+                     local_node_id, (unsigned long)local_seq_num);
+            notify_capture_failed(local_node_id, local_seq_num, "coda di inoltro interna piena");
+            free(local_buffer);
+        }
+
     } else {
         ESP_LOGW(TAG, "Foto ricomposta ma CRC non corrisponde (atteso 0x%04X, calcolato 0x%04X).",
                  s_reassembly_image_crc, computed_crc);
-        notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
+        uint8_t local_node_id = s_reassembly_node_id;
+        uint32_t local_seq_num = s_reassembly_seq_num;
+        free_reassembly_state();
+        xSemaphoreGive(s_reassembly_mutex);
+        notify_capture_failed(local_node_id, local_seq_num,
                                "CRC non valido dopo la ricomposizione (corruzione in trasmissione)");
     }
-
-    free_reassembly_state();
 }
 
 /*
@@ -640,21 +827,33 @@ static void reassembly_timeout_task(void *pvParameters) {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(2000));
 
+        xSemaphoreTake(s_reassembly_mutex, portMAX_DELAY);
+
         if (!reassembly_in_progress()) {
+            xSemaphoreGive(s_reassembly_mutex);
             continue;
         }
 
         int64_t elapsed_ms = (esp_timer_get_time() / 1000) - s_reassembly_start_time_ms;
-        if (elapsed_ms > REASSEMBLY_TIMEOUT_MS) {
-            ESP_LOGW(TAG, "Ricomposizione scaduta (nodo=%d seq=%lu): %u/%u frammenti "
-                          "ricevuti dopo %lld secondi.",
-                     s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
-                     s_reassembly_fragments_received_count, s_reassembly_total_fragments,
-                     elapsed_ms / 1000);
-            notify_capture_failed(s_reassembly_node_id, s_reassembly_seq_num,
-                                   "timeout - pezzi mancanti, ricezione mai completata");
-            free_reassembly_state();
+        if (elapsed_ms <= REASSEMBLY_TIMEOUT_MS) {
+            xSemaphoreGive(s_reassembly_mutex);
+            continue;
         }
+
+        uint8_t local_node_id = s_reassembly_node_id;
+        uint32_t local_seq_num = s_reassembly_seq_num;
+        uint16_t local_received = s_reassembly_fragments_received_count;
+        uint16_t local_total = s_reassembly_total_fragments;
+
+        free_reassembly_state();
+        xSemaphoreGive(s_reassembly_mutex);
+
+        ESP_LOGW(TAG, "Ricomposizione scaduta (nodo=%d seq=%lu): %u/%u frammenti "
+                      "ricevuti dopo %lld secondi.",
+                 local_node_id, (unsigned long)local_seq_num,
+                 local_received, local_total, elapsed_ms / 1000);
+        notify_capture_failed(local_node_id, local_seq_num,
+                               "timeout - pezzi mancanti, ricezione mai completata");
     }
 }
 
@@ -690,7 +889,18 @@ static void on_esp_now_data_received(const esp_now_recv_info_t *recv_info,
         ESP_LOGI(TAG, "Pacchetto valido ricevuto - nodo=%d seq=%lu mode=reference image_ref='%s'",
                  packet.node_id, (unsigned long)packet.seq_num, packet.image_ref);
 
-        handle_offloading_and_forward(&packet);
+        // Non inoltriamo direttamente da qui (stesso motivo delle foto
+        // catturate - vedi la nota sopra la definizione di forward_task):
+        // l'inoltro HTTP e' bloccante e girerebbe nel contesto della
+        // ricezione radio. Lo passiamo al task condiviso tramite la coda.
+        forward_request_t forward_req = {
+            .type = FORWARD_REQUEST_REFERENCE,
+            .reference_packet = packet,
+        };
+        if (xQueueSend(s_forward_queue, &forward_req, 0) != pdTRUE) {
+            ESP_LOGE(TAG, "Coda di inoltro piena - pacchetto reference 'gw01-node%d-%06lu' perso.",
+                     packet.node_id, (unsigned long)packet.seq_num);
+        }
         return;
     }
 
@@ -809,9 +1019,29 @@ void app_main(void) {
                  RETRY_QUEUE_DEPTH, RETRY_INTERVAL_MS / 1000);
     }
 
+    s_reassembly_mutex = xSemaphoreCreateMutex();
+    if (s_reassembly_mutex == NULL) {
+        ESP_LOGE(TAG, "Impossibile creare il mutex di ricomposizione - rischio di corruzione "
+                      "se una foto e il controllo di timeout si toccano nello stesso istante.");
+    }
+
     xTaskCreate(reassembly_timeout_task, "reassembly_timeout", 4096, NULL, 5, NULL);
     ESP_LOGI(TAG, "Controllo timeout ricomposizione foto attivo (%d secondi).",
              REASSEMBLY_TIMEOUT_MS / 1000);
+
+    // Coda condivisa per l'inoltro (sia 'reference' sia foto catturate) -
+    // un solo task dedicato, cosi' la ricezione radio non aspetta mai
+    // l'inoltro HTTP. Capacita' 4: anche se un inoltro impegna il task
+    // per decine di secondi (i tentativi con pausa), c'e' un margine
+    // per qualche pacchetto extra arrivato nel frattempo prima di dover
+    // scartare qualcosa.
+    s_forward_queue = xQueueCreate(4, sizeof(forward_request_t));
+    if (s_forward_queue == NULL) {
+        ESP_LOGE(TAG, "Impossibile creare la coda di inoltro - nulla verra' mai inoltrato.");
+    } else {
+        xTaskCreate(forward_task, "forward_task", 4096, NULL, 4, NULL);
+        ESP_LOGI(TAG, "Task di inoltro (dedicato, non blocca la ricezione radio) attivo.");
+    }
 
     ESP_LOGI(TAG, "Gateway pronto. In attesa di pacchetti dall'Acquisition Node.");
 

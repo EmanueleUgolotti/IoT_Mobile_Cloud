@@ -452,8 +452,20 @@ creeremo.
 
 - ⬜ MQTT come alternativa/affiancamento a HTTP
   → `backend/api/`, `docker/docker-compose.yml`, `esp32/gateway/`
-- ⬜ Docker Swarm come estensione del deployment
-  → `docker/`
+- ✅ **Docker Swarm come estensione del deployment** — stack file
+  dimostrativo (`docker-stack.yml`), separato dal `docker-compose.yml`
+  usato per lo sviluppo quotidiano (che resta invariato). Mostra
+  concretamente come il sistema scalerebbe con più macchine, anche se
+  qui testato su un solo PC ("swarm a un nodo") - `deploy.replicas` è il
+  punto dove si alzerebbe il numero di copie con più nodi collegati.
+  **Testato e funzionante**: tutti e 4 i servizi a `1/1` repliche sotto
+  Swarm, applicazione raggiungibile e funzionante (`/health` risponde
+  correttamente). Limite noto, documentato nei commenti del file:
+  Swarm non aspetta un healthcheck prima di avviare un servizio
+  dipendente, a differenza di Compose (`depends_on: condition:
+  service_healthy`) - osservato in pratica (`robustness` a `0/1` per
+  qualche secondo mentre carica il modello, prima di arrivare a `1/1`).
+  → `docker/docker-stack.yml`
 
 ---
 

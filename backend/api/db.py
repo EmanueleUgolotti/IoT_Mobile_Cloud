@@ -156,6 +156,31 @@ def get_recent_failures(limit: int = 20) -> list[dict]:
         conn.close()
 
 
+def get_acquisition_by_id(acquisition_id: int) -> dict | None:
+    """
+    Recupera una singola acquisizione per id - usata per servire
+    l'immagine associata (dataset o foto catturata) dato solo l'id
+    mostrato nella tabella dei risultati della dashboard.
+    """
+    query = """
+        SELECT id, mode, image_ref, dataset_id, image_path
+        FROM acquisitions
+        WHERE id = %s;
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (acquisition_id,))
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                columns = [desc[0] for desc in cur.description]
+                return dict(zip(columns, row))
+    finally:
+        conn.close()
+
+
 def _execute_insert(query: str, values: tuple) -> int:
     conn = get_connection()
     try:

@@ -72,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
             NavigationUI.setupActionBarWithNavController(this, navController);
         }
 
-        // --- Caricamento del classificatore ---
+        // Caricamento del classificatore 
         try {
             classifier = new Classifier(getAssets(), MODEL_FILE);
             AppState.getInstance().classifier = classifier;

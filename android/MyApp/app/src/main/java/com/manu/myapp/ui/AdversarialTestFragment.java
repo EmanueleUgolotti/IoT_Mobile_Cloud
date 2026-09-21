@@ -81,7 +81,7 @@ public class AdversarialTestFragment extends Fragment {
 
     private Bitmap selectedBitmap;
     // Percorsi delle immagini dell'ultimo risultato mostrato, salvate su
-    // storage interno - servono per aprire ImageViewerActivity al tocco
+    // storage interno
     private String lastOriginalImagePath;
     private String lastAdversarialImagePath;
 
@@ -165,7 +165,7 @@ public class AdversarialTestFragment extends Fragment {
         startActivity(intent);
     }
 
-    // --- Scelta immagine di partenza (galleria o cronologia classificazioni) ---
+    // Scelta immagine di partenza (galleria o cronologia classificazioni)
 
     private void pickFromHistory() {
         if (getContext() == null) {
@@ -238,7 +238,7 @@ public class AdversarialTestFragment extends Fragment {
                 input.close();
             }
             if (bitmap != null) {
-                // Fondamentale: senza questo limite, un'immagine ad alta
+                // Senza questo limite, un'immagine ad alta
                 // risoluzione dalla galleria puo' causare esaurimento di
                 // memoria/blocco del PC lato backend durante un attacco
                 // (stesso problema gia' risolto per il Test Manuale).
@@ -254,7 +254,7 @@ public class AdversarialTestFragment extends Fragment {
         }
     }
 
-    // --- Esecuzione dell'attacco ---
+    // Esecuzione dell'attacco
 
     private void runAttack() {
         if (selectedBitmap == null) {
@@ -333,7 +333,7 @@ public class AdversarialTestFragment extends Fragment {
         textError.setVisibility(View.VISIBLE);
     }
 
-    // --- Cronologia degli attacchi ---
+    // Cronologia degli attacchi
 
     private void viewAttackHistory() {
         if (getContext() == null) {

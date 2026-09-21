@@ -198,7 +198,7 @@ public class HistoryFragment extends Fragment {
                 for (int i = 0; i < results.length(); i++) {
                     JSONObject result = results.getJSONObject(i);
 
-                    // Per ora sincronizziamo solo i risultati in modalita'
+                    // Per ora sincronizzio solo i risultati in modalita'
                     // 'reference' (hanno image_ref/dataset_id, quindi
                     // l'immagine e' scaricabile da /dataset/image). I
                     // risultati 'captured' non hanno ancora un endpoint
@@ -226,7 +226,7 @@ public class HistoryFragment extends Fragment {
                         String predictedLabel = result.getString("predicted_label");
                         float[] probabilities = jsonToOrderedArray(result.getJSONObject("probabilities"));
 
-                        // Tra le probabilita' per classe, prendiamo quella
+                        // Tra le probabilita' per classe, prendo quella
                         // della classe predetta come "confidenza" - stesso
                         // significato che ha gia' altrove nell'app.
                         float confidence = 0f;
@@ -239,7 +239,7 @@ public class HistoryFragment extends Fragment {
 
                         String imagePath = ImageStorage.save(requireContext(), bitmap, imageRef);
 
-                        // Usiamo il momento della sincronizzazione come
+                        // Uso il momento della sincronizzazione come
                         // timestamp (non l'orario originale della
                         // classificazione sul server) - evita di dover
                         // analizzare il formato data ISO del backend,

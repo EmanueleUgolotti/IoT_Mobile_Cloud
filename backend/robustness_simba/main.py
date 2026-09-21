@@ -1,16 +1,14 @@
-"""
-Endpoint HTTP per l'attacco SimBA, in un servizio Docker separato da
-quello TensorFlow (backend/robustness/), per evitare il conflitto
-TensorFlow+PyTorch nello stesso processo (vedi decisions-log.md per la
-diagnosi completa - crash confermato empiricamente).
+# Endpoint HTTP per l'attacco SimBA, in un servizio Docker separato da
+# quello TensorFlow (backend/robustness/), per evitare il conflitto
+# TensorFlow+PyTorch nello stesso processo (vedi decisions-log.md per la
+# diagnosi completa - crash confermato empiricamente).
 
-Questo servizio NON carica il modello VGG16 direttamente: ad ogni
-"domanda" di cui SimBA ha bisogno durante l'attacco, chiama il servizio
-TensorFlow (backend/robustness/, endpoint /robustness/predict) via HTTP.
-Più lento di una chiamata locale, ma architetturalmente pulito - nessun
-conflitto di librerie possibile, dato che qui PyTorch non incontra mai
-TensorFlow.
-"""
+# Questo servizio NON carica il modello VGG16 direttamente: ad ogni
+# "domanda" di cui SimBA ha bisogno durante l'attacco, chiama il servizio
+# TensorFlow (backend/robustness/, endpoint /robustness/predict) via HTTP.
+# Più lento di una chiamata locale, ma architetturalmente pulito - nessun
+# conflitto di librerie possibile, dato che qui PyTorch non incontra mai
+# TensorFlow.
 
 import base64
 import os
@@ -61,11 +59,10 @@ def check_auth(x_api_key: str | None):
 
 
 def _to_plain_floats(prob_dict: dict) -> dict:
-    """
-    Converte un dizionario {classe: numpy.float32} in {classe: float}
-    "normale" - Pydantic non sa serializzare direttamente i tipi numpy
-    in JSON (causava PydanticSerializationError).
-    """
+    # Converte un dizionario {classe: numpy.float32} in {classe: float}
+    # "normale" - Pydantic non sa serializzare direttamente i tipi numpy
+    # in JSON (causava PydanticSerializationError).
+    
     return {k: float(v) for k, v in prob_dict.items()}
 
 
@@ -77,11 +74,10 @@ def encode_image_b64(img_rgb_uint8: np.ndarray) -> str:
 
 
 def make_remote_predict_fn():
-    """
-    Costruisce una predict_fn che manda un batch di immagini al servizio
-    TensorFlow via HTTP e restituisce le probabilita'. Popola anche la
-    cache dei nomi delle classi al primo utilizzo.
-    """
+    # Costruisce una predict_fn che manda un batch di immagini al servizio
+    # TensorFlow via HTTP e restituisce le probabilita'. Popola anche la
+    # cache dei nomi delle classi al primo utilizzo.
+    
     call_counter = {"n": 0}
 
     def predict_fn(img_rgb_255_batch: np.ndarray) -> np.ndarray:

@@ -1,26 +1,3 @@
-"""
-Attacco SimBA (black-box, PyTorch).
-
-Versione per il servizio isolato robustness-simba: NON importa mai
-TensorFlow (a differenza della versione precedente, che chiamava
-pipeline_predict/TensorFlow in locale). L'interrogazione del modello
-avviene tramite una funzione "predict_fn" fornita dal chiamante:
-
-  - Uso da CLI/test locale (fuori Docker, sullo stesso processo del
-    tirocinio): si puo' ancora passare `model` + `class_names` per usare
-    TensorFlow in locale (utile per test rapidi sul PC, dove TF e
-    PyTorch coesistono senza problemi - il crash e' specifico
-    dell'ambiente Docker, non del codice in se').
-
-  - Uso dal servizio robustness-simba (dentro Docker): si passa
-    `predict_fn`, una funzione che manda le immagini al servizio
-    TensorFlow separato via HTTP e restituisce le probabilita' - nessun
-    import di TensorFlow in questo processo.
-
-Uso da linea di comando (richiede TensorFlow installato in locale):
-    python run_simba.py --image_path /percorso/immagine.jpg
-"""
-
 import os
 import sys
 import argparse
@@ -41,11 +18,9 @@ IMG_SIZE = 512
 
 
 class PredictFnWrapper(nn.Module):
-    """
-    Adatta una funzione predict_fn generica (numpy in, numpy out) a un
-    modulo PyTorch, cosi' SimBA (che lavora con tensori torch) puo'
-    chiamarla come se fosse un modello nn.Module qualsiasi.
-    """
+    # Adatta una funzione predict_fn generica (numpy in, numpy out) a un
+    # modulo PyTorch, cosi' SimBA (che lavora con tensori torch) puo'
+    # chiamarla come se fosse un modello nn.Module qualsiasi.
 
     def __init__(self, predict_fn):
         super().__init__()
@@ -59,7 +34,7 @@ class PredictFnWrapper(nn.Module):
 
 
 def _local_predict_fn(model_type, model):
-    """Predict_fn che usa un modello locale (richiede pipeline_predict/TensorFlow importati dal chiamante)."""
+    # Predict_fn che usa un modello locale (richiede pipeline_predict/TensorFlow importati dal chiamante).
     import pipeline_predict  # import locale: solo se questa modalita' viene davvero usata
 
     def predict_fn(img_rgb_255_batch: np.ndarray) -> np.ndarray:
@@ -88,19 +63,18 @@ def run_simba_attack(img_rgb_uint8: np.ndarray, class_names, predict_fn=None,
                       model=None, model_type: str = "vgg16",
                       max_iters: int = 500, epsilon: float = 0.2,
                       freq_dims: int = 20, pixel_attack: bool = False):
-    """
-    Esegue l'attacco SimBA su una singola immagine.
+    # Esegue l'attacco SimBA su una singola immagine.
 
-    Serve UNA delle due cose per interrogare il modello:
-    - predict_fn: funzione (img_rgb_255_batch: np.ndarray) -> probs np.ndarray,
-      usata dal servizio robustness-simba (chiamata HTTP al servizio TF)
-    - model: modello gia' caricato in locale (richiede pipeline_predict/
-      TensorFlow importabili nel processo corrente - solo per uso CLI/test)
+    # Serve UNA delle due cose per interrogare il modello:
+    # - predict_fn: funzione (img_rgb_255_batch: np.ndarray) -> probs np.ndarray,
+    #   usata dal servizio robustness-simba (chiamata HTTP al servizio TF)
+    # - model: modello gia' caricato in locale (richiede pipeline_predict/
+    #  TensorFlow importabili nel processo corrente - solo per uso CLI/test)
 
-    Restituisce un dizionario con: immagine avversaria (uint8 RGB),
-    predizione originale, predizione avversaria, esito (SUCC/FAIL),
-    probabilita' per classe originali e avversarie.
-    """
+    # Restituisce un dizionario con: immagine avversaria (uint8 RGB),
+    # predizione originale, predizione avversaria, esito (SUCC/FAIL),
+    # probabilita' per classe originali e avversarie.
+    
     if predict_fn is None:
         if model is None:
             raise ValueError("Serve predict_fn oppure model")

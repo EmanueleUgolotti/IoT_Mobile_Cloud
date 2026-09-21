@@ -1,7 +1,5 @@
-"""
-Accesso al database. Semplice apposta: una funzione di connessione
-e alcune funzioni di insert/update/select, nessun ORM.
-"""
+# Accesso al database. Semplice apposta: una funzione di connessione
+# e alcune funzioni di insert/update/select, nessun ORM.
 
 import json
 import os
@@ -63,14 +61,13 @@ def insert_captured(payload: CapturedIngestRequest, image_path: str) -> int:
 
 
 def insert_capture_failure(node_id: int, seq_num: int, reason: str) -> int:
-    """
-    Registra un tentativo di scatto fallito (segnalato dal Gateway):
-    pezzi mancanti, CRC non valido, o inoltro fallito su entrambe le
-    destinazioni. Non c'e' nessuna immagine associata (mai arrivata
-    completa) - la riga serve solo a dire "qui doveva esserci uno
-    scatto, ma non ce l'ha fatta", cosi' l'app puo' un giorno mostrare
-    "scatto da rifare".
-    """
+    # Registra un tentativo di scatto fallito (segnalato dal Gateway):
+    # pezzi mancanti, CRC non valido, o inoltro fallito su entrambe le
+    # destinazioni. Non c'e' nessuna immagine associata (mai arrivata
+    # completa) - la riga serve solo a dire "qui doveva esserci uno
+    # scatto, ma non ce l'ha fatta", cosi' l'app puo' un giorno mostrare
+    # scatto da rifare".
+
     query = """
         INSERT INTO acquisitions
             (request_id, mode, node_id, seq_num, gateway_timestamp,
@@ -84,13 +81,12 @@ def insert_capture_failure(node_id: int, seq_num: int, reason: str) -> int:
 
 
 def update_classification(acquisition_id: int, predicted_label: str, probabilities: dict) -> None:
-    """
-    Salva il risultato dell'inferenza ML per un'acquisizione gia'
-    inserita. Chiamata separatamente dall'insert iniziale, perche' la
-    classificazione avviene DOPO aver gia' salvato la richiesta - se la
-    classificazione fallisce (es. servizio robustness non raggiungibile),
-    la riga resta comunque salvata, solo senza risultato (colonne NULL).
-    """
+    # Salva il risultato dell'inferenza ML per un'acquisizione gia'
+    # inserita. Chiamata separatamente dall'insert iniziale, perche' la
+    # classificazione avviene DOPO aver gia' salvato la richiesta - se la
+    # classificazione fallisce (es. servizio robustness non raggiungibile),
+    # la riga resta comunque salvata, solo senza risultato (colonne NULL).
+    
     query = """
         UPDATE acquisitions
         SET predicted_label = %s, probabilities = %s, classified_at = now()
@@ -108,10 +104,9 @@ def update_classification(acquisition_id: int, predicted_label: str, probabiliti
 
 
 def get_recent_results(limit: int = 20) -> list[dict]:
-    """
-    Restituisce le acquisizioni gia' classificate (predicted_label non
-    nullo), piu' recenti prima. Usata dall'endpoint GET /cloud/results.
-    """
+    # Restituisce le acquisizioni gia' classificate (predicted_label non
+    # nullo), piu' recenti prima. Usata dall'endpoint GET /cloud/results.
+    
     query = """
         SELECT id, request_id, mode, image_ref, dataset_id, capture_id,
                predicted_label, probabilities, received_at, classified_at
@@ -133,10 +128,9 @@ def get_recent_results(limit: int = 20) -> list[dict]:
 
 
 def get_recent_failures(limit: int = 20) -> list[dict]:
-    """
-    Restituisce gli ultimi tentativi di scatto falliti (segnalati dal
-    Gateway), piu' recenti prima.
-    """
+    # Restituisce gli ultimi tentativi di scatto falliti (segnalati dal
+    # Gateway), piu' recenti prima.
+    
     query = """
         SELECT id, request_id, node_id, seq_num, failure_reason, received_at
         FROM acquisitions
@@ -157,11 +151,10 @@ def get_recent_failures(limit: int = 20) -> list[dict]:
 
 
 def get_acquisition_by_id(acquisition_id: int) -> dict | None:
-    """
-    Recupera una singola acquisizione per id - usata per servire
-    l'immagine associata (dataset o foto catturata) dato solo l'id
-    mostrato nella tabella dei risultati della dashboard.
-    """
+    # Recupera una singola acquisizione per id - usata per servire
+    # l'immagine associata (dataset o foto catturata) dato solo l'id
+    # mostrato nella tabella dei risultati della dashboard.
+    
     query = """
         SELECT id, mode, image_ref, dataset_id, image_path
         FROM acquisitions

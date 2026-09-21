@@ -1,18 +1,8 @@
-"""
-Interfaccia COMUNE di interrogazione del modello, indipendente dal tipo
-di modello (ML classico o VGG16). Smista internamente verso il modulo
-specializzato giusto:
-    model_type == "ml"     -> pipeline_predict_ml.py
-    model_type == "vgg16"  -> pipeline_predict_vgg16.py
-
-NOTA (adattamento per l'integrazione nel backend BPA): l'import di
-pipeline_predict_ml e' reso opzionale. La pipeline dei modelli ML
-classici richiede moduli aggiuntivi (image_train.*, con i filtri Otsu e
-l'estrazione feature) non ancora portati in questo progetto - per ora
-qui sono attivi solo gli attacchi su VGG16. Se pipeline_predict_ml.py
-o le sue dipendenze non sono disponibili, model_type == "ml" solleva
-un errore chiaro invece di far fallire l'import dell'intero modulo.
-"""
+# Interfaccia COMUNE di interrogazione del modello, indipendente dal tipo
+# di modello (ML classico o VGG16). Smista internamente verso il modulo
+# specializzato giusto:
+#     model_type == "ml"     -> pipeline_predict_ml.py
+#     model_type == "vgg16"  -> pipeline_predict_vgg16.py
 
 import numpy as np
 

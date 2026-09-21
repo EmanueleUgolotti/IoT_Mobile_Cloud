@@ -1,33 +1,26 @@
 /*
  * Gateway (ESP32 #2)
  *
- * Task 1 (fatto): inizializzazione WiFi/ESP-NOW, ricezione e validazione
+ * Inizializzazione WiFi/ESP-NOW, ricezione e validazione
  * pacchetti dall'Acquisition Node.
  *
- * Task 2 (fatto): connessione WiFi vera (necessaria per l'HTTP),
+ * Connessione WiFi (necessaria per l'HTTP),
  * decisione di offloading (Cloud in priorita', Mobile come riserva se
  * il Cloud non e' raggiungibile), costruzione del payload JSON coerente
  * con network-design.md, inoltro HTTP verso /cloud/ingest o
  * /mobile/ingest, coda locale di retry.
  *
- * Task 3 (questo file): ricezione e ricomposizione di foto vere,
+ * Ricezione e ricomposizione di foto vere,
  * mandate frammentate dall'Acquisition Node (un pacchetto ESP-NOW non
- * contiene una foto intera - vedi lo schema esp_now_frag_packet_t sotto,
+ * contiene una foto intera - schema esp_now_frag_packet_t sotto,
  * IDENTICO byte per byte a quello nel firmware dell'Acquisition Node).
  * Una volta ricomposta e verificata (CRC), viene inoltrata come
  * modalita' 'captured' con lo stesso meccanismo di offloading gia'
  * usato per i pacchetti 'reference'.
  *
- * NOTA SULLO SCOPE DI QUESTO TASK: se un tentativo di scatto fallisce
- * (pezzi mancanti, CRC non valido, inoltro fallito), per ora viene solo
- * LOGGATO chiaramente su questo Gateway - notificare il backend (cosi'
- * l'app/Cloud possano mostrare "scatto da rifare") e' un piccolo passo
- * successivo separato, che richiede anche una modifica al backend
- * (vedi roadmap).
- *
  * Configurazione (WiFi, indirizzi backend, API key): tramite
- * "idf.py menuconfig" -> "BPA Gateway Configuration", vedi
- * main/Kconfig.projbuild. Nessuna credenziale scritta qui nel codice.
+ * "idf.py menuconfig" -> "BPA Gateway Configuration", 
+ * main/Kconfig.projbuild.
  */
 
 #include <string.h>
@@ -49,36 +42,28 @@
 
 static const char *TAG = "BPA_GATEWAY";
 
-/* ---------- Stato di connessione WiFi ---------- */
+/* Stato di connessione WiFi */
 
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 
-/* ---------- Coda locale di retry (solo per pacchetti 'reference') ----------
+/* Coda locale di retry (solo per pacchetti 'reference')
  * Se l'inoltro fallisce sia verso Cloud sia verso Mobile, il pacchetto
  * viene messo in questa coda invece di essere perso subito. Un task in
  * background riprova periodicamente, rifacendo da capo la decisione di
  * offloading (non si fissa sulla stessa destinazione che era fallita -
  * se nel frattempo il Cloud torna raggiungibile, ci prova).
  *
- * NOTA: le foto catturate (modalita' 'captured') NON usano questa coda
+ * Le foto catturate (modalita' 'captured') NON usano questa coda
  * - richiederebbe conservare l'intero buffer immagine (fino a decine di
- * KB) invece di un piccolo pacchetto a dimensione fissa. Se l'inoltro di
- * una foto fallisce, per ora viene semplicemente persa con un log
- * chiaro (vedi notify_capture_failed) - limite noto, accettato.
- *
- * LIMITE NOTO (documentato, non risolto qui): la coda vive solo in RAM,
- * viene persa se il Gateway si riavvia. Risolverlo richiederebbe
- * salvarla su flash (NVS), non necessario per lo scopo di questo
- * progetto - il rischio principale (perdita dati per un riavvio
- * durante un'interruzione di rete) e' un evento raro nella pratica.
+ * KB) invece di un piccolo pacchetto a dimensione fissa. Limite noto, accettato.
  */
 #define RETRY_QUEUE_DEPTH 10
 #define RETRY_INTERVAL_MS 30000
 
 static QueueHandle_t s_retry_queue;
 
-/* ---------- Schema del pacchetto ESP-NOW 'reference' (invariato) ---------- */
+/* Schema del pacchetto ESP-NOW 'reference' (invariato) */
 
 typedef enum {
     MODE_REFERENCE = 0,
@@ -101,7 +86,7 @@ static uint16_t compute_packet_crc(const esp_now_packet_t *packet) {
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
-/* ---------- Schema dei pacchetti per foto vere (modalita' 'captured') ----------
+/* Schema dei pacchetti per foto vere (modalita' 'captured')
  * IDENTICO, byte per byte, a quello nel firmware dell'Acquisition Node
  * (esp32/acquisition-node/main/main.c) - i due dispositivi devono
  * "parlare la stessa lingua". Se uno dei due cambia, va aggiornato
@@ -142,7 +127,7 @@ static uint16_t compute_frag_packet_crc(const esp_now_frag_packet_t *packet) {
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
-/* ---------- Contatore per request_id (node_id + seq_num, come da schema) ---------- */
+/* Contatore per request_id (node_id + seq_num, come da schema) */
 
 static char *build_request_id(uint8_t node_id, uint32_t seq_num) {
     static char buf[32];
@@ -150,7 +135,7 @@ static char *build_request_id(uint8_t node_id, uint32_t seq_num) {
     return buf;
 }
 
-/* ---------- Connessione WiFi ---------- */
+/* Connessione WiFi */
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                 int32_t event_id, void *event_data) {
@@ -225,7 +210,7 @@ static void init_wifi(void) {
     }
 }
 
-/* ---------- Controllo di raggiungibilita' del Cloud ---------- */
+/* Controllo di raggiungibilita' del Cloud */
 
 static bool is_cloud_reachable(void) {
     if (!is_wifi_connected()) {
@@ -254,7 +239,7 @@ static bool is_cloud_reachable(void) {
     return reachable;
 }
 
-/* ---------- Costruzione del payload JSON (schema da network-design.md) ---------- */
+/* Costruzione del payload JSON (schema da network-design.md) */
 
 static char *build_json_payload(const esp_now_packet_t *packet, const char *request_id) {
     cJSON *root = cJSON_CreateObject();
@@ -262,10 +247,7 @@ static char *build_json_payload(const esp_now_packet_t *packet, const char *requ
     cJSON_AddNumberToObject(root, "node_id", packet->node_id);
     cJSON_AddNumberToObject(root, "seq_num", packet->seq_num);
 
-    // Timestamp del gateway (non quello, non affidabile, del nodo mittente).
-    // Senza un modulo RTC/NTP configurato, usiamo un valore placeholder
-    // leggibile - non e' l'orario assoluto reale, ma la logica applicativa
-    // (ordine di arrivo, request_id univoco) non dipende da questo valore.
+    // Timestamp del gateway.
     cJSON_AddStringToObject(root, "gateway_timestamp", "1970-01-01T00:00:00Z");
 
     cJSON_AddStringToObject(root, "mode", "reference");
@@ -323,7 +305,7 @@ static char *build_captured_json_payload(uint8_t node_id, uint32_t seq_num,
     return json_string;
 }
 
-/* ---------- Inoltro HTTP verso Cloud o Mobile ---------- */
+/* Inoltro HTTP verso Cloud o Mobile */
 
 static bool forward_via_http(const char *host, int port, const char *endpoint_path,
                               const char *json_payload) {
@@ -448,36 +430,11 @@ static void notify_capture_failed(uint8_t node_id, uint32_t seq_num, const char 
  * Inoltra una foto vera, gia' ricomposta e verificata, usando la stessa
  * logica di offloading dei pacchetti 'reference' (Cloud prima, Mobile
  * come riserva). A differenza dei pacchetti 'reference', in caso di
- * fallimento NON viene accodata per un retry (richiederebbe conservare
- * l'intero buffer immagine) - viene solo segnalata come fallita.
- */
-/*
- * Inoltra una foto vera, gia' ricomposta e verificata, usando la stessa
- * logica di offloading dei pacchetti 'reference' (Cloud prima, Mobile
- * come riserva). A differenza dei pacchetti 'reference', in caso di
  * fallimento NON viene accodata per un retry 30 secondi dopo
  * (richiederebbe conservare l'intero buffer immagine per tutto quel
- * tempo) - ma, dato che il buffer e' comunque gia' in memoria in questo
+ * tempo), ma, dato che il buffer e' comunque gia' in memoria in questo
  * istante, vale la pena riprovare subito un paio di volte con una
- * breve pausa, prima di arrendersi - un compromesso economico che non
- * richiede nessuna coda, e recupera i fallimenti piu' brevi/transitori
- * (osservato: la stessa instabilita' di rete che sui pacchetti
- * 'reference' viene assorbita dal retry a 30 secondi, sulle foto
- * catturate falliva sempre al primo colpo, senza nessuna seconda
- * possibilita').
- *
- * OSSERVAZIONE SUCCESSIVA: i pacchetti 'reference' (un solo pacchetto
- * ESP-NOW) arrivano quasi sempre a destinazione, mentre le foto
- * catturate (40-50 pacchetti ESP-NOW in rapida successione, per la
- * frammentazione) falliscono quasi sempre il PRIMO tentativo - stesso
- * fenomeno gia' diagnosticato sull'Acquisition Node: ESP-NOW e WiFi
- * condividono la stessa antenna, e una raffica intensa di ricezione
- * radio puo' disturbare temporaneamente la connessione WiFi, proprio
- * nel momento in cui si tenta di aprire una connessione HTTP subito
- * dopo. Per questo, prima ancora del primo tentativo (non solo tra un
- * retry e l'altro), si aspetta un breve momento per dare tempo alla
- * radio di stabilizzarsi dopo la raffica di ricezione appena conclusa.
- */
+ * breve pausa, prima di arrendersi */
 #define CAPTURED_PHOTO_IMMEDIATE_RETRIES 2
 #define CAPTURED_PHOTO_RETRY_DELAY_MS 2000
 #define CAPTURED_PHOTO_SETTLE_DELAY_MS 800
@@ -526,22 +483,18 @@ static void forward_captured_photo(uint8_t node_id, uint32_t seq_num,
 }
 
 /*
- * OSSERVAZIONE IMPORTANTE (causa del problema "le foto non arrivano
- * mai, i reference sì"): la funzione che riceve i pacchetti radio
+ * Problema che ho visto: la funzione che riceve i pacchetti radio
  * ESP-NOW chiamava finora l'inoltro HTTP DIRETTAMENTE, in modo
  * bloccante - per una foto, con i tentativi extra e le pause, questo
  * blocco puo' durare fino a 30-40 secondi filati. Per tutto quel
  * tempo, lo stack di rete di sistema (che tiene viva la connessione
  * WiFi) resta congelato, incapace di fare la sua manutenzione normale
- * - il risultato osservato: ogni tentativo di connessione (anche il
+ * quindi ogni tentativo di connessione (anche il
  * semplice controllo "il Cloud e' raggiungibile?") falliva per l'
  * intera durata del blocco, apparendo come "la rete non funziona",
  * quando in realta' era il Gateway stesso a essersi bloccato il
- * respiro. I pacchetti 'reference' (un solo tentativo veloce)
- * soffrivano molto meno per lo stesso motivo, ma non erano immuni -
- * anche il loro inoltro girava (e girerebbe, se non corretto anche
- * per loro) direttamente dentro la ricezione radio.
- *
+ * respiro. 
+ * 
  * Soluzione: la ricezione radio ora si limita a "passare il testimone"
  * (mette la richiesta in una coda) e torna subito libera - UN SOLO
  * task dedicato si occupa con calma dell'inoltro vero, sia per i
@@ -579,7 +532,7 @@ static void forward_task(void *pvParameters) {
     }
 }
 
-/* ---------- Ricezione e ricomposizione di foto frammentate ----------
+/* Ricezione e ricomposizione di foto frammentate 
  * Stato di UNA SOLA ricomposizione alla volta (coerente con l'
  * Acquisition Node, che ha un raffreddamento tra uno scatto e l'altro
  * e non ne manda mai due in parallelo).
@@ -762,9 +715,8 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
                  s_reassembly_node_id, (unsigned long)s_reassembly_seq_num,
                  (unsigned long)s_reassembly_total_size);
 
-        // IMPORTANTE: "scolleghiamo" il buffer dallo stato globale PRIMA
-        // di chiamare l'inoltro (che ora, con i tentativi immediati con
-        // pausa, puo' richiedere piu' del timeout di ricomposizione) -
+        // Scollego il buffer dallo stato globale PRIMA
+        // di chiamare l'inoltro 
         // altrimenti il task di controllo timeout vede ancora una
         // ricomposizione "in corso" e la dichiara erroneamente scaduta,
         // anche se in realta' e' gia' completa da tempo e sta solo
@@ -784,14 +736,7 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
 
         xSemaphoreGive(s_reassembly_mutex);
 
-        // NON chiamiamo forward_captured_photo() direttamente da qui -
-        // questa funzione gira nel contesto della ricezione radio
-        // ESP-NOW, e l'inoltro HTTP (con i suoi tentativi e pause) puo'
-        // durare decine di secondi - bloccarla qui congelerebbe anche
-        // la ricezione radio e lo stack di rete per tutto quel tempo
-        // (causa gia' identificata di molti fallimenti misteriosi).
-        // Passiamo la richiesta al task condiviso di inoltro tramite la
-        // coda, e torniamo subito liberi.
+        
         forward_request_t forward_req = {
             .type = FORWARD_REQUEST_CAPTURED,
             .node_id = local_node_id,
@@ -819,7 +764,7 @@ static void handle_frag_data(const esp_now_frag_packet_t *packet) {
 }
 
 /*
- * Task in background che controlla se una ricomposizione in corso ha
+ * Controllo se una ricomposizione in corso ha
  * superato il tempo massimo senza completarsi (pezzi persi per strada,
  * senza che ne sia mai arrivato uno nuovo per accorgersene subito).
  */
@@ -857,7 +802,7 @@ static void reassembly_timeout_task(void *pvParameters) {
     }
 }
 
-/* ---------- Ricezione ESP-NOW ---------- */
+/* Ricezione ESP-NOW */
 
 static void log_own_mac_address(void) {
     uint8_t mac[6];
@@ -889,8 +834,8 @@ static void on_esp_now_data_received(const esp_now_recv_info_t *recv_info,
         ESP_LOGI(TAG, "Pacchetto valido ricevuto - nodo=%d seq=%lu mode=reference image_ref='%s'",
                  packet.node_id, (unsigned long)packet.seq_num, packet.image_ref);
 
-        // Non inoltriamo direttamente da qui (stesso motivo delle foto
-        // catturate - vedi la nota sopra la definizione di forward_task):
+        // Non inoltro direttamente da qui (stesso motivo delle foto
+        // catturate):
         // l'inoltro HTTP e' bloccante e girerebbe nel contesto della
         // ricezione radio. Lo passiamo al task condiviso tramite la coda.
         forward_request_t forward_req = {
@@ -936,7 +881,7 @@ static void on_esp_now_data_received(const esp_now_recv_info_t *recv_info,
 }
 
 /*
- * Task in background che svuota periodicamente la coda di retry (solo
+ * Svuoto periodicamente la coda di retry (solo
  * pacchetti 'reference' - vedi nota sulla coda in cima al file),
  * riprovando l'inoltro di ogni pacchetto rimasto in sospeso.
  */
@@ -1031,10 +976,7 @@ void app_main(void) {
 
     // Coda condivisa per l'inoltro (sia 'reference' sia foto catturate) -
     // un solo task dedicato, cosi' la ricezione radio non aspetta mai
-    // l'inoltro HTTP. Capacita' 4: anche se un inoltro impegna il task
-    // per decine di secondi (i tentativi con pausa), c'e' un margine
-    // per qualche pacchetto extra arrivato nel frattempo prima di dover
-    // scartare qualcosa.
+    // l'inoltro HTTP. 
     s_forward_queue = xQueueCreate(4, sizeof(forward_request_t));
     if (s_forward_queue == NULL) {
         ESP_LOGE(TAG, "Impossibile creare la coda di inoltro - nulla verra' mai inoltrato.");

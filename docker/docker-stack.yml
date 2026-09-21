@@ -15,8 +15,7 @@
 #    questa demo, ma è il punto dove si scriverebbe un numero più alto
 #    per scalare davvero, con più macchine collegate allo Swarm).
 #
-# 3. LIMITE NOTO (da spiegare a voce, non risolto qui): Swarm non
-#    aspetta un healthcheck prima di avviare un servizio dipendente,
+# 3. LIMITE NOTO: Swarm non aspetta un healthcheck prima di avviare un servizio dipendente,
 #    a differenza di "docker compose up" (che con
 #    "depends_on: condition: service_healthy" aspetta davvero che
 #    "robustness" sia pronto prima di avviare "robustness-simba").

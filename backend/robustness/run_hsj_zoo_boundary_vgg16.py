@@ -1,19 +1,18 @@
-"""
-Attacchi black-box HSJ (HopSkipJump), ZOO, Boundary su VGG16.
+# Attacchi black-box HSJ (HopSkipJump), ZOO, Boundary su VGG16.
 
-Versione adattata per l'integrazione nel backend BPA: la logica di
-attacco e' estratta in run_art_attack(), riutilizzabile dall'endpoint
-backend. Mantenuta anche la modalita' da riga di comando per test
-indipendenti.
+# Versione adattata per l'integrazione nel backend BPA: la logica di
+# attacco e' estratta in run_art_attack(), riutilizzabile dall'endpoint
+# backend. Mantenuta anche la modalita' da riga di comando per test
+# indipendenti.
 
-Uso da linea di comando:
-    python run_hsj_zoo_boundary_vgg16.py --image_path /percorso/immagine.jpg --attack Boundary
-    python run_hsj_zoo_boundary_vgg16.py --image_path /percorso/immagine.jpg --attack HSJ
+# Uso da linea di comando:
+#    python run_hsj_zoo_boundary_vgg16.py --image_path /percorso/immagine.jpg --attack Boundary
+#    python run_hsj_zoo_boundary_vgg16.py --image_path /percorso/immagine.jpg --attack HSJ
 
-Uso come libreria (per l'endpoint backend):
-    from run_hsj_zoo_boundary_vgg16 import run_art_attack
-    result = run_art_attack(image_rgb_uint8, attack_name="Boundary")
-"""
+# Uso come libreria (per l'endpoint backend):
+#    from run_hsj_zoo_boundary_vgg16 import run_art_attack
+#    result = run_art_attack(image_rgb_uint8, attack_name="Boundary")
+
 
 import os
 import sys
@@ -81,23 +80,22 @@ def build_attack(attack_name, art_classifier, params):
 
 def run_art_attack(img_rgb_uint8: np.ndarray, attack_name: str, model=None, class_names=None,
                     model_path: str = DEFAULT_MODEL_PATH, max_iter: int = None):
-    """
-    Esegue un attacco ART (HSJ, Boundary o ZOO) su una singola immagine.
-    Pensata per essere richiamata dall'endpoint backend.
+    # Esegue un attacco ART (HSJ, Boundary o ZOO) su una singola immagine.
+    # Pensata per essere richiamata dall'endpoint backend.
 
-    img_rgb_uint8: array numpy (H, W, 3), RGB, valori 0-255, QUALSIASI
-        risoluzione - viene ridimensionata a IMG_SIZE (224x224) subito
-        sotto, prima di eseguire l'attacco. Motivo: il modello vede
-        comunque solo 224x224 (pipeline_predict la ridimensiona
-        internamente ad ogni predizione); far lavorare l'attacco
-        sull'immagine a risoluzione originale sprecava memoria e tempo
-        di calcolo senza alcun beneficio, ed era la causa di crash per
-        esaurimento memoria su immagini ad alta risoluzione.
+    # img_rgb_uint8: array numpy (H, W, 3), RGB, valori 0-255, QUALSIASI
+    #    risoluzione - viene ridimensionata a IMG_SIZE (224x224) subito
+    #    sotto, prima di eseguire l'attacco. Motivo: il modello vede
+    #    comunque solo 224x224 (pipeline_predict la ridimensiona
+    #    internamente ad ogni predizione); far lavorare l'attacco
+    #    sull'immagine a risoluzione originale sprecava memoria e tempo
+    #    di calcolo senza alcun beneficio, ed era la causa di crash per
+    #    esaurimento memoria su immagini ad alta risoluzione.
 
-    Restituisce un dizionario con: immagine avversaria (uint8 RGB),
-    predizione originale, predizione avversaria, esito (SUCC/FAIL),
-    probabilita' per classe, metriche di perturbazione (L2, Linf).
-    """
+    # Restituisce un dizionario con: immagine avversaria (uint8 RGB),
+    # predizione originale, predizione avversaria, esito (SUCC/FAIL),
+    # probabilita' per classe, metriche di perturbazione (L2, Linf).
+    
     if attack_name not in ATTACK_DEFAULTS:
         raise ValueError(f"Attacco non riconosciuto: {attack_name}")
 

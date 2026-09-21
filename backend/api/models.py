@@ -1,8 +1,7 @@
-"""
-Modelli dati per i payload ricevuti dal gateway (ESP32 #2).
-Rispecchiano esattamente lo schema definito in
-docs/architecture/network-design.md (sezione 4).
-"""
+# Modelli dati per i payload ricevuti dal gateway (ESP32 #2).
+# Rispecchiano esattamente lo schema definito in
+# docs/architecture/network-design.md (sezione 4).
+
 
 from datetime import datetime
 from typing import Literal, Optional

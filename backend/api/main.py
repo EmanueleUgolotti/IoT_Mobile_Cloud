@@ -1,13 +1,11 @@
 """
-Backend API - skeleton.
+Backend API.
 Espone /cloud/ingest, l'endpoint che il Gateway (ESP32 #2) chiama
 per inoltrare un'acquisizione al cloud.
 
 Dopo aver salvato la richiesta, prova a classificarla chiamando il
-servizio robustness (che ha gia' il modello VGG16 caricato in memoria -
-vedi decisions-log per il perche' non duplichiamo un secondo servizio
-ML separato: eviterebbe di caricare TensorFlow due volte, costoso in
-RAM). Se la classificazione fallisce (es. robustness non raggiungibile),
+servizio robustness (che ha gia' il modello VGG16 caricato in memoria). 
+Se la classificazione fallisce (es. robustness non raggiungibile),
 la richiesta resta comunque salvata correttamente - solo senza
 risultato, recuperabile in un secondo momento se si rifa' girare
 l'inferenza manualmente. La risposta al Gateway non dipende mai
@@ -45,12 +43,12 @@ ROBUSTNESS_SERVICE_URL = os.environ.get("ROBUSTNESS_SERVICE_URL", "http://robust
 
 
 class CaptureFailureRequest(BaseModel):
-    """
-    Notifica dal Gateway: un tentativo di scatto non e' arrivato a buon
-    fine (pezzi mancanti, CRC non valido, o inoltro fallito). Definito
-    qui direttamente (non in models.py) per non rischiare di toccare
-    quel file senza conoscerne il contenuto attuale.
-    """
+    
+    # Notifica dal Gateway: un tentativo di scatto non e' arrivato a buon
+    # fine (pezzi mancanti, CRC non valido, o inoltro fallito). Definito
+    # qui direttamente (non in models.py) per non rischiare di toccare
+    # quel file senza conoscerne il contenuto attuale.
+
     node_id: int
     seq_num: int
     reason: str
@@ -64,13 +62,13 @@ def check_auth(x_api_key: str | None):
 
 
 def classify_and_store(image_bytes: bytes, acquisition_id: int) -> None:
-    """
-    Chiama il servizio robustness per classificare l'immagine, e salva
-    il risultato sulla riga gia' inserita. Non solleva mai eccezioni
-    verso il chiamante - un fallimento qui non deve mai far fallire la
-    risposta /cloud/ingest, che ha gia' fatto il suo lavoro principale
-    (salvare la richiesta) prima di arrivare qui.
-    """
+    
+    # Chiama il servizio robustness per classificare l'immagine, e salva
+    # il risultato sulla riga gia' inserita. Non solleva mai eccezioni
+    # verso il chiamante - un fallimento qui non deve mai far fallire la
+    # risposta /cloud/ingest, che ha gia' fatto il suo lavoro principale
+    #(salvare la richiesta) prima di arrivare qui.
+    
     try:
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -159,12 +157,10 @@ def _handle_captured(body: dict) -> IngestResponse:
 
 @app.get("/cloud/results")
 async def get_results(limit: int = 20):
-    """
-    Restituisce le ultime acquisizioni gia' classificate dal cloud, piu'
-    recenti prima. Pensato per essere interrogato dall'app mobile (o da
-    qualunque altro client) per mostrare i risultati fatti lato server,
-    non solo quelli fatti localmente sul telefono.
-    """
+    
+    # Restituisce le ultime acquisizioni gia' classificate dal cloud, piu'
+    # recenti prima.
+    
     results = db.get_recent_results(limit=limit)
     # I timestamp (datetime) e il campo probabilities (gia' un dict
     # grazie a JSONB) sono serializzati automaticamente da FastAPI.
@@ -173,13 +169,13 @@ async def get_results(limit: int = 20):
 
 @app.post("/cloud/capture-failed")
 async def capture_failed(payload: CaptureFailureRequest, x_api_key: str | None = Header(default=None)):
-    """
-    Il Gateway chiama questo endpoint quando un tentativo di scatto non
-    e' arrivato a buon fine (pezzi mancanti, CRC non valido, o inoltro
-    fallito su entrambe le destinazioni) - salva solo un riferimento
-    (nessuna immagine, non e' mai arrivata completa), cosi' in futuro
-    l'app potra' mostrare "scatto da rifare".
-    """
+    
+    # Il Gateway chiama questo endpoint quando un tentativo di scatto non
+    # e' arrivato a buon fine (pezzi mancanti, CRC non valido, o inoltro
+    # fallito su entrambe le destinazioni) - salva solo un riferimento
+    # (nessuna immagine, non e' mai arrivata completa), cosi' in futuro
+    # l'app potra' mostrare "scatto da rifare".
+    
     check_auth(x_api_key)
 
     stored_id = db.insert_capture_failure(payload.node_id, payload.seq_num, payload.reason)
@@ -188,10 +184,9 @@ async def capture_failed(payload: CaptureFailureRequest, x_api_key: str | None =
 
 @app.get("/cloud/failures")
 async def get_failures(limit: int = 20):
-    """
-    Restituisce gli ultimi tentativi di scatto falliti, piu' recenti
-    prima - controparte di /cloud/results per i fallimenti.
-    """
+    # Restituisce gli ultimi tentativi di scatto falliti, piu' recenti
+    # prima - controparte di /cloud/results per i fallimenti.
+    
     failures = db.get_recent_failures(limit=limit)
     return {"failures": failures}
 
@@ -344,13 +339,11 @@ loadAll();
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    """
-    Pagina web minimale che mostra i dati del Cloud (classificazioni e
-    scatti falliti) senza bisogno del telefono - serve solo a
-    dimostrare visivamente che il sistema funziona. Riusa gli stessi
-    endpoint gia' esistenti (/cloud/results, /cloud/failures) tramite
-    JavaScript nel browser, nessuna nuova logica sul backend.
-    """
+    # Pagina web minimale che mostra i dati del Cloud (classificazioni e
+    # scatti falliti) Riusa gli stessi
+    # endpoint gia' esistenti (/cloud/results, /cloud/failures) tramite
+    # JavaScript nel browser, nessuna nuova logica sul backend.
+    
     return HTMLResponse(content=DASHBOARD_HTML)
 
 
@@ -361,14 +354,14 @@ async def health():
 
 @app.get("/cloud/results/{acquisition_id}/image")
 async def get_result_image(acquisition_id: int):
-    """
-    Serve l'immagine associata a una riga di /cloud/results, sia che
-    sia una foto vera catturata (gia' salvata su disco, percorso in
-    image_path) sia un riferimento al dataset condiviso (stesso file
-    usato anche dall'app) - un solo endpoint per entrambi i casi, cosi'
-    la dashboard puo' mostrare una miniatura senza doversi preoccupare
-    di quale dei due tipi sia.
-    """
+    
+    # Serve l'immagine associata a una riga di /cloud/results, sia che
+    # sia una foto vera catturata (gia' salvata su disco, percorso in
+    # image_path) sia un riferimento al dataset condiviso (stesso file
+    # usato anche dall'app) - un solo endpoint per entrambi i casi, cosi'
+    # la dashboard puo' mostrare una miniatura senza doversi preoccupare
+    # di quale dei due tipi sia.
+    
     row = db.get_acquisition_by_id(acquisition_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Acquisition {acquisition_id} not found")
@@ -388,12 +381,12 @@ async def get_result_image(acquisition_id: int):
 
 @app.get("/dataset/image")
 async def get_dataset_image(dataset_id: str, image_ref: str):
-    """
-    Serve il file immagine vero, dato il riferimento e il dataset.
-    Usato dall'app mobile per scaricare l'immagine quando riceve una
-    richiesta in modalita' 'reference' dal Gateway (che manda solo il
-    nome del file, non i byte).
-    """
+    
+    # Serve il file immagine vero, dato il riferimento e il dataset.
+    # Usato dall'app mobile per scaricare l'immagine quando riceve una
+    # richiesta in modalita' 'reference' dal Gateway (che manda solo il
+    # nome del file, non i byte).
+    
     image_path = DATASET_PATH / dataset_id / image_ref
     if not image_path.is_file():
         raise HTTPException(

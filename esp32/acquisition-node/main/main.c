@@ -1,25 +1,12 @@
 /*
- * Acquisition Node (ESP32 #1) - Task 1: modalita' 'reference'
- *
- * Scope di questo task: SOLO l'invio di pacchetti in modalita'
- * 'reference' (un riferimento a un'immagine gia' presente nel dataset
- * condiviso, non i byte veri) - coerente con la roadmap, che segna la
- * modalita' 'captured' (foto vera dalla fotocamera, con relativa
- * frammentazione ESP-NOW) come task separato, successivo.
- *
- * Il nodo si limita a scegliere, a rotazione, un nome file dalla stessa
- * lista che esiste davvero nel dataset condiviso (data/dataset/bpa_v1/
- * sul backend), e a mandarlo periodicamente al Gateway via ESP-NOW.
- *
+ * Acquisition Node (ESP32 #1) 
+ * 
  * IMPORTANTE: la struttura del pacchetto e l'algoritmo CRC qui sotto
  * devono restare IDENTICI, byte per byte, a quelli definiti nel
- * firmware del Gateway (esp32/gateway/main/main.c) - i due dispositivi
- * devono "parlare la stessa lingua". Se uno dei due cambia, va
- * aggiornato anche l'altro.
+ * firmware del Gateway (esp32/gateway/main/main.c)
  *
  * Configurazione (WiFi, MAC del Gateway, intervallo di invio): tramite
- * "idf.py menuconfig" -> "BPA Acquisition Node Configuration", vedi
- * main/Kconfig.projbuild.
+ * "idf.py menuconfig" -> "BPA Acquisition Node Configuration"
  */
 
 #include <string.h>
@@ -43,18 +30,15 @@
 
 static const char *TAG = "BPA_ACQUISITION_NODE";
 
-/* ---------- Stato di connessione WiFi ---------- */
+//Stato di connessione WiFi
 
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 
-/* ---------- Schema del pacchetto ESP-NOW ----------
- * IDENTICO a quello del Gateway - vedi nota in cima al file.
- */
-
+//Schema del pacchetto ESP-NOW IDENTICO a quello del Gateway
 typedef enum {
     MODE_REFERENCE = 0,
-    MODE_CAPTURED = 1,
+    //MODE_CAPTURED = 1,
 } acquisition_mode_t;
 
 typedef struct __attribute__((packed)) {
@@ -73,15 +57,14 @@ static uint16_t compute_packet_crc(const esp_now_packet_t *packet) {
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
-/* ---------- Schema dei pacchetti per foto vere (modalita' 'captured') ----------
+/*Schema dei pacchetti per foto vere (modalita' 'captured')
  * SEPARATO dallo schema 'reference' sopra - una foto vera (anche
  * compressa in JPEG) pesa molto piu' dei ~250 byte che un singolo
  * pacchetto ESP-NOW puo' contenere, quindi va spezzata in piu' pezzi.
- *
+ 
  * IMPORTANTE: questa struttura deve restare IDENTICA, byte per byte,
- * anche nel firmware del Gateway (prossimo task) - stessa regola gia'
- * seguita per esp_now_packet_t.
- *
+ * anche nel firmware del Gateway 
+ 
  * Due tipi di pacchetto, distinti dal campo packet_type:
  * - HEADER: mandato una volta sola, dice quanti byte totali e quanti
  *   frammenti aspettarsi, piu' un codice di controllo (CRC) dell'intera
@@ -123,10 +106,9 @@ static uint16_t compute_frag_packet_crc(const esp_now_frag_packet_t *packet) {
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
-/* ---------- Lista delle immagini del dataset condiviso ----------
+/*Lista delle immagini del dataset condiviso
  * Deve corrispondere ai file realmente presenti in
- * data/dataset/bpa_v1/ sul backend - se il dataset cambia, aggiornare
- * anche questa lista.
+ * data/dataset/bpa_v1/ sul backend
  */
 static const char *DATASET_IMAGES[] = {
     "1-1paper25.jpg",
@@ -140,17 +122,8 @@ static const char *DATASET_IMAGES[] = {
 };
 #define DATASET_IMAGES_COUNT (sizeof(DATASET_IMAGES) / sizeof(DATASET_IMAGES[0]))
 
-/* ---------- Fotocamera + display (anteprima dal vivo + scatto su richiesta) ----------
- * Inizializzazione identica al progetto di prova "display_camera"
- * (esempio ufficiale Espressif per questa scheda, gia' verificato
- * funzionante) - qui riusata cosi' com'era, non reinventata.
- *
- * NOTA IMPORTANTE SU QUESTO PASSAGGIO: la fotocamera scatta davvero
- * quando premi PLAY, ma il risultato per ora viene solo LOGGATO (byte
- * catturati), non ancora mandato via ESP-NOW - l'invio richiede la
- * frammentazione (un pacchetto ESP-NOW non contiene una foto intera),
- * che e' il prossimo pezzo di lavoro, non ancora costruito.
- */
+/* Fotocamera + display (anteprima dal vivo + scatto su richiesta)
+ * Inizializzazione identica al progetto di prova "display_camera" */
 
 static uint8_t *s_cam_buff;
 static lv_obj_t *s_camera_canvas;
@@ -158,14 +131,14 @@ static lv_obj_t *s_camera_canvas;
 // Protegge l'accesso alla fotocamera: l'anteprima dal vivo e lo scatto
 // su richiesta girano in due task/contesti diversi, e la libreria della
 // fotocamera non e' sicura se chiamata contemporaneamente da entrambi
-// (causava corruzione di memoria e crash - vedi decisions-log). Questo
-// mutex garantisce che solo uno dei due usi la fotocamera alla volta.
+// (causava corruzione di memoria e crash).
+// Questo mutex garantisce che solo uno dei due usi la fotocamera alla volta.
 static SemaphoreHandle_t s_camera_mutex;
-// NOTA: NON usiamo piu' vTaskSuspend/vTaskResume per mettere in pausa
+// NOTA: NON uso piu' vTaskSuspend/vTaskResume per mettere in pausa
 // l'anteprima durante uno scatto - causava un blocco totale (deadlock):
 // vTaskSuspend puo' fermare un task in QUALSIASI istante, anche mentre
 // tiene il mutex della fotocamera, lasciandolo bloccato per sempre.
-// Usiamo invece un segnale cooperativo: l'anteprima stessa controlla
+// Uso invece un segnale cooperativo: l'anteprima stessa controlla
 // questo flag e si ferma da sola, solo in un punto sicuro (mai mentre
 // tiene il mutex).
 static volatile bool s_pause_preview = false;
@@ -201,7 +174,7 @@ static void init_camera_and_display(void) {
     bsp_display_unlock();
 }
 
-/* Task dedicato: aggiorna continuamente l'anteprima sul display, il
+/* Aggiorna continuamente l'anteprima sul display, il
  * piu' velocemente possibile, per un'immagine fluida. */
 static void camera_preview_task(void *pvParameters) {
     uint32_t cam_buff_size = BSP_LCD_H_RES * BSP_LCD_V_RES * 2;
@@ -219,18 +192,9 @@ static void camera_preview_task(void *pvParameters) {
         if (pic) {
             bsp_display_lock(0);
 
-            // CORREZIONE IMPORTANTE (causa probabile del crash mai
-            // risolto finora): il fotogramma catturato (pic->len) puo'
-            // essere PIU' PICCOLO del buffer del display (cam_buff_size,
-            // dimensionato per la risoluzione del display, non per
-            // quella reale della fotocamera - vedi gli avvisi
-            // "FB-SIZE: X != 115200" visti nei log). Copiare sempre
-            // cam_buff_size byte, come faceva il codice originale,
-            // significava leggere OLTRE la fine del vero buffer della
-            // fotocamera - un difetto silenzioso presente fin
-            // dall'inizio (copiato dall'esempio ufficiale), che
-            // probabilmente corrompeva la PSRAM adiacente a ogni singolo
-            // fotogramma dell'anteprima continua, non solo agli scatti.
+
+            // Fix: copiare pic->len byte invece di cam_buff_size per evitare
+            // letture oltre la fine del buffer della fotocamera.
             size_t bytes_to_copy = (pic->len < cam_buff_size) ? pic->len : cam_buff_size;
             memcpy(s_cam_buff, pic->buf, bytes_to_copy);
 
@@ -251,20 +215,17 @@ static void camera_preview_task(void *pvParameters) {
 /*
  * Scatta una foto vera su richiesta (pulsante BOOT). La fotocamera
  * cattura in formato grezzo RGB565 (necessario per l'anteprima dal
- * vivo), quindi qui la convertiamo in JPEG compresso (funzione
+ * vivo), quindi qui la converto in JPEG compresso (funzione
  * frame2jpg, gia' inclusa nel pacchetto della fotocamera) prima di
  * frammentarla e mandarla - un JPEG e' molto piu' piccolo (decine di
- * KB invece di ~150KB), essenziale per stare entro tempi ragionevoli
- * di trasmissione via ESP-NOW.
+ * KB invece di ~150KB)
  */
 static void send_captured_photo(const uint8_t *jpeg_data, size_t jpeg_len, uint32_t seq_num);
 
 static void capture_photo_on_demand(void) {
-    // NUOVO: sospende del tutto il task di anteprima per l'intera durata
-    // di scatto+conversione+invio (non solo la conversione) - i crash
-    // residui osservati avvenivano proprio nella finestra in cui
-    // l'anteprima era ripresa a girare mentre l'invio dei frammenti era
-    // ancora in corso. Sospendere il task, invece di solo bloccarlo con
+    // Sospendo del tutto il task di anteprima per l'intera durata
+    // di scatto+conversione+invio (non solo la conversione) 
+    // Sospendere il task, invece di solo bloccarlo con
     // un mutex, elimina qualunque sua attivita' (fotocamera+display+
     // PSRAM) per l'intera durata dell'operazione.
     s_pause_preview = true;
@@ -284,12 +245,7 @@ static void capture_photo_on_demand(void) {
     uint8_t *jpg_buf = NULL;
     size_t jpg_len = 0;
 
-    // Diagnostica: se il crash osservato in precedenza (corruzione di
-    // memoria dentro frame2jpg) si ripresenta, questo log mostra se la
-    // RAM interna E la PSRAM libere si stanno riducendo scatto dopo
-    // scatto - scoperta importante: frame2jpg alloca il suo buffer in
-    // PSRAM (non RAM interna), quindi e' quella la memoria da tenere
-    // sott'occhio per questo crash specifico.
+    // Diagnostica
     ESP_LOGI(TAG, "RAM interna libera: %u byte - PSRAM libera: %u byte",
              (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
@@ -314,10 +270,7 @@ static void capture_photo_on_demand(void) {
 
     // L'invio via ESP-NOW avviene DOPO aver rilasciato mutex e display,
     // ma il task di anteprima resta SOSPESO (non solo bloccato dal
-    // mutex) per tutta la trasmissione - vedi nota sopra sul crash
-    // residuo osservato proprio in questa finestra.
-    // Stesso motivo della modalita' reference: non partire da 0, per
-    // evitare di ripetere un request_id gia' usato in un boot precedente.
+    // mutex) per tutta la trasmissione 
     static uint32_t s_captured_seq_num = 0;
     if (s_captured_seq_num == 0) {
         s_captured_seq_num = (uint32_t)(esp_timer_get_time() / 1000);
@@ -329,10 +282,9 @@ static void capture_photo_on_demand(void) {
     s_pause_preview = false;
 }
 
-/* ---------- Pulsante BOOT (unico pulsante, letto via GPIO puro) ----------
+/* Pulsante BOOT (unico pulsante, letto via GPIO puro)
  * NOTA IMPORTANTE: i quattro pulsanti MENU/PLAY/UP/DOWN condividono un
- * canale ADC - creare quei pulsanti (anche solo per registrarne due,
- * come nel tentativo precedente) avvia comunque un timer interno che
+ * canale ADC - creare quei pulsanti avvia comunque un timer interno che
  * legge PERIODICAMENTE tutti i pulsanti dell'array, ADC compresi,
  * andando in conflitto con la fotocamera. Il pulsante BOOT invece e'
  * su un pin GPIO digitale indipendente (nessun ADC coinvolto) - creando
@@ -349,16 +301,9 @@ static void capture_photo_on_demand(void) {
 
 static volatile bool s_auto_mode_enabled = false;
 
-/*
- * NOTA IMPORTANTE (causa del crash precedente): le callback dei
- * pulsanti girano sul task di sistema dedicato ai timer (stack piccolo,
- * pensato per operazioni brevi) - fare lavoro pesante li' dentro
- * (conversione JPEG, che richiede parecchia memoria di lavoro) causava
- * un overflow dello stack e la conseguente corruzione di memoria. La
- * callback ora si limita a "dare il via libera" a una coda; il lavoro
- * vero (capture_photo_on_demand) gira su un task dedicato a parte, con
- * uno stack grande a sufficienza.
- */
+/* La conversione JPEG nella callback causava un overflow dello stack. 
+ * La callback ora avvia solo la richiesta, mentre la cattura viene eseguita 
+ * da un task dedicato. */
 static QueueHandle_t s_capture_request_queue;
 
 static void on_boot_short_press(void *button_handle, void *usr_data) {
@@ -372,26 +317,8 @@ static void on_boot_long_press(void *button_handle, void *usr_data) {
              s_auto_mode_enabled ? "ATTIVA" : "spenta");
 }
 
-/* Task dedicato che esegue davvero lo scatto, con uno stack generoso -
- * si sveglia solo quando arriva una richiesta dalla coda.
- *
- * NOTA IMPORTANTE: e' stato osservato che scatti troppo ravvicinati
- * (premere BOOT di nuovo mentre il precedente sta ancora finendo di
- * mandare i frammenti) possono causare un crash per corruzione di
- * memoria dentro la libreria di conversione JPEG - causa non ancora
- * isolata con certezza (probabile margine ridotto di memoria interna,
- * vedi decisions-log). Per mitigarlo, viene imposto un tempo minimo di
- * "raffreddamento" tra uno scatto completato e la richiesta successiva
- * - non elimina il rischio alla radice, ma lo rende molto meno
- * probabile dando al sistema il tempo di stabilizzarsi.
- *
- * NOTA (ritardo iniziale rimosso su richiesta): era stato anche
- * osservato che il primo scatto, se fatto entro 10-15 secondi
- * dall'accensione, crashava piu' spesso - era stato aggiunto un blocco
- * automatico dei primi 15 secondi, poi rimosso per preferenza
- * dell'utente. Se necessario, resta buona norma aspettare qualche
- * secondo dopo l'accensione prima del primo scatto.
- */
+/* Task dedicato che esegue davvero lo scatto,
+ * si sveglia solo quando arriva una richiesta dalla coda. */
 #define CAPTURE_COOLDOWN_MS 3000
 
 static void capture_request_task(void *pvParameters) {
@@ -441,7 +368,7 @@ static void init_buttons(void) {
     ESP_LOGI(TAG, "Pulsante BOOT inizializzato (GPIO puro, nessun ADC coinvolto).");
 }
 
-/* ---------- Connessione WiFi (stesso schema del Gateway) ---------- */
+/* Connessione WiFi (stesso schema del Gateway) */
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                 int32_t event_id, void *event_data) {
@@ -482,8 +409,7 @@ static void init_wifi(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    // Disattiva il risparmio energetico del radio WiFi - vedi la stessa
-    // identica nota nel firmware del Gateway (main.c) per il perche':
+    // Disattiva il risparmio energetico del radio WiFi 
     // senza questo, ESP-NOW perde pacchetti a intermittenza per via del
     // "modem sleep" periodico del radio.
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
@@ -501,7 +427,7 @@ static void init_wifi(void) {
     }
 }
 
-/* ---------- Analisi dell'indirizzo MAC del Gateway (da stringa a byte) ---------- */
+/* Analisi dell'indirizzo MAC del Gateway (da stringa a byte) */
 
 static bool parse_mac_address(const char *mac_str, uint8_t *mac_bytes) {
     int values[6];
@@ -517,13 +443,12 @@ static bool parse_mac_address(const char *mac_str, uint8_t *mac_bytes) {
     return true;
 }
 
-/* ---------- Callback di conferma invio ESP-NOW ---------- */
+/* Callback di conferma invio ESP-NOW */
 
 // Usato per "mettere in pausa" l'invio dei frammenti finche' non
 // arriva la vera conferma del precedente (invece di una pausa fissa
 // "alla cieca") - evita di riempire la coda interna di ESP-NOW piu'
-// velocemente di quanto la radio riesca a svuotarla (causava perdita
-// di alcuni frammenti con errore ESP_ERR_ESPNOW_NO_MEM).
+// velocemente di quanto la radio riesca a svuotarla.
 static SemaphoreHandle_t s_esp_now_send_done_sem;
 
 static void on_esp_now_data_sent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
@@ -568,7 +493,7 @@ static void init_esp_now(void) {
              CONFIG_BPA_GATEWAY_MAC_ADDR);
 }
 
-/* ---------- Invio frammentato di una foto vera (modalita' 'captured') ---------- */
+/* Invio frammentato di una foto vera (modalita' 'captured') */
 
 /*
  * Spezza una foto JPEG gia' compressa in pacchetti ESP-NOW piccoli
@@ -578,8 +503,7 @@ static void init_esp_now(void) {
  *
  * Se l'invio di un singolo pacchetto fallisce (radio), si continua
  * comunque con i successivi - sara' il Gateway a decidere se
- * l'immagine ricevuta e' completa o va scartata, e a segnalarlo (vedi
- * roadmap: notifica di tentativo fallito, task del Gateway).
+ * l'immagine ricevuta e' completa o va scartata, e a segnalarlo.
  */
 static void send_captured_photo(const uint8_t *jpeg_data, size_t jpeg_len, uint32_t seq_num) {
     uint16_t total_fragments = (uint16_t)((jpeg_len + FRAGMENT_DATA_SIZE - 1) / FRAGMENT_DATA_SIZE);
@@ -642,7 +566,7 @@ static void send_captured_photo(const uint8_t *jpeg_data, size_t jpeg_len, uint3
     ESP_LOGI(TAG, "Invio foto completato (%u frammenti mandati).", total_fragments);
 }
 
-/* ---------- Invio ciclico dei pacchetti 'reference' ---------- */
+/*  Invio ciclico dei pacchetti 'reference' */
 
 static void send_reference_packet(uint32_t seq_num, const char *image_ref) {
     esp_now_packet_t packet = {
@@ -670,15 +594,13 @@ static void send_reference_packet(uint32_t seq_num, const char *image_ref) {
  * callback dei pulsanti sopra, non da un polling qui dentro.
  */
 static void acquisition_loop_task(void *pvParameters) {
-    // NON si parte da 0: il database del backend ricorda tutti i
+    // Il database del backend ricorda tutti i
     // request_id gia' visti, anche tra un riavvio della scheda e
     // l'altro - se il contatore ripartisse sempre da zero, un pacchetto
     // "numero zero" di oggi avrebbe lo stesso identico request_id di
     // un "numero zero" di ieri, venendo rifiutato per sempre come
-    // duplicato (osservato: un pacchetto bloccato in retry all'infinito
-    // con errore "UniqueViolation" dal database). Si parte invece da un
-    // numero legato al tempo trascorso dall'accensione - stesso trucco
-    // gia' usato con successo per il pacchetto di selftest del Gateway.
+    // duplicato. Si parte invece da un
+    // numero legato al tempo trascorso dall'accensione.
     uint32_t seq_num = (uint32_t)(esp_timer_get_time() / 1000);
     size_t image_index = 0;
 
@@ -729,16 +651,12 @@ void app_main(void) {
                   "%d immagini in rotazione.",
              CONFIG_BPA_SEND_INTERVAL_MS, DATASET_IMAGES_COUNT);
 
-    // NOTA: un tentativo precedente allocava gli stack di queste task
+    // Un tentativo precedente allocava gli stack di queste task
     // in PSRAM (xTaskCreateStatic) per aggirare la scarsita' di RAM
-    // interna - causava pero' un crash (DoubleException), perche'
+    // interna, causava pero' un crash, perche'
     // Espressif sconsiglia esplicitamente stack in PSRAM per task che
-    // toccano codice di sistema (WiFi, fotocamera, persino memcpy) come
-    // le nostre. La soluzione corretta e' invece liberare RAM interna
-    // altrove: vedi l'opzione "Allow .bss segment placed in external
-    // memory" in "idf.py menuconfig" -> Component config -> ESP PSRAM,
-    // che sposta i dati interni di WiFi/rete in PSRAM (questo si',
-    // esplicitamente supportato da Espressif per questo scenario).
+    // toccano codice di sistema (WiFi, fotocamera, persino memcpy).
+    // La soluzione corretta e' invece liberare RAM interna.
     ESP_LOGI(TAG, "RAM interna libera prima di creare le task: %u byte",
              (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 

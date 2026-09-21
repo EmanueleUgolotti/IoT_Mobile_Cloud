@@ -1,26 +1,5 @@
 /*
- * Acquisition Node (ESP32 #1) - Task 1: modalita' 'reference'
- *
- * Scope di questo task: SOLO l'invio di pacchetti in modalita'
- * 'reference' (un riferimento a un'immagine gia' presente nel dataset
- * condiviso, non i byte veri) - coerente con la roadmap, che segna la
- * modalita' 'captured' (foto vera dalla fotocamera, con relativa
- * frammentazione ESP-NOW) come task separato, successivo, che
- * richiedera' l'hardware della fotocamera (non ancora disponibile).
- *
- * Il nodo si limita a scegliere, a rotazione, un nome file dalla stessa
- * lista che esiste davvero nel dataset condiviso (data/dataset/bpa_v1/
- * sul backend), e a mandarlo periodicamente al Gateway via ESP-NOW.
- *
- * IMPORTANTE: la struttura del pacchetto e l'algoritmo CRC qui sotto
- * devono restare IDENTICI, byte per byte, a quelli definiti nel
- * firmware del Gateway (esp32/gateway/main/main.c) - i due dispositivi
- * devono "parlare la stessa lingua". Se uno dei due cambia, va
- * aggiornato anche l'altro.
- *
- * Configurazione (WiFi, MAC del Gateway, intervallo di invio): tramite
- * "idf.py menuconfig" -> "BPA Acquisition Node Configuration", vedi
- * main/Kconfig.projbuild.
+ * Acquisition Node (ESP32 #1)  *
  */
 
 #include <string.h>
@@ -43,12 +22,12 @@
 
 static const char *TAG = "BPA_ACQUISITION_NODE";
 
-/* ---------- Stato di connessione WiFi ---------- */
+/* Stato di connessione WiFi */
 
 static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 
-/* ---------- Schema del pacchetto ESP-NOW ----------
+/* Schema del pacchetto ESP-NOW 
  * IDENTICO a quello del Gateway - vedi nota in cima al file.
  */
 
@@ -73,10 +52,9 @@ static uint16_t compute_packet_crc(const esp_now_packet_t *packet) {
     return esp_rom_crc16_le(CRC_SEED, (const uint8_t *)packet, len_without_crc);
 }
 
-/* ---------- Lista delle immagini del dataset condiviso ----------
+/* Lista delle immagini del dataset condiviso 
  * Deve corrispondere ai file realmente presenti in
- * data/dataset/bpa_v1/ sul backend - se il dataset cambia, aggiornare
- * anche questa lista.
+ * data/dataset/bpa_v1/ sul backend
  */
 static const char *DATASET_IMAGES[] = {
     "1-1paper25.jpg",
@@ -90,15 +68,7 @@ static const char *DATASET_IMAGES[] = {
 };
 #define DATASET_IMAGES_COUNT (sizeof(DATASET_IMAGES) / sizeof(DATASET_IMAGES[0]))
 
-/* ---------- Pulsanti (letti via ADC, condividono un solo pin) ----------
- * Stesso schema hardware della scheda ESP32-S3-EYE ufficiale: i quattro
- * pulsanti MENU/PLAY/UP/DOWN sono tutti collegati allo stesso pin
- * (GPIO1, canale ADC1_CH0) e producono ciascuno una tensione diversa
- * quando premuto - li si distingue confrontando la tensione letta con
- * le soglie qui sotto (valori copiati esattamente dal file sorgente
- * ufficiale del pacchetto esp32_s3_eye, per essere sicuri che siano
- * corretti - non indovinati a mano).
- *
+/* Pulsanti (letti via ADC, condividono un solo pin)
  * Uso in questo progetto: PLAY = scatta e manda subito (sempre
  * disponibile); MENU = accende/spegne la modalita' automatica a
  * intervalli. UP e DOWN non hanno ancora una funzione assegnata.
@@ -183,17 +153,7 @@ static button_t read_pressed_button(void) {
     return BUTTON_NONE;
 }
 
-/* ---------- Fotocamera + display (anteprima dal vivo + scatto su richiesta) ----------
- * Inizializzazione identica al progetto di prova "display_camera"
- * (esempio ufficiale Espressif per questa scheda, gia' verificato
- * funzionante) - qui riusata cosi' com'era, non reinventata.
- *
- * NOTA IMPORTANTE SU QUESTO PASSAGGIO: la fotocamera scatta davvero
- * quando premi PLAY, ma il risultato per ora viene solo LOGGATO (byte
- * catturati), non ancora mandato via ESP-NOW - l'invio richiede la
- * frammentazione (un pacchetto ESP-NOW non contiene una foto intera),
- * che e' il prossimo pezzo di lavoro, non ancora costruito.
- */
+// Fotocamera + display (anteprima dal vivo + scatto su richiesta) 
 
 static uint8_t *s_cam_buff;
 static lv_obj_t *s_camera_canvas;
@@ -226,7 +186,7 @@ static void init_camera_and_display(void) {
     bsp_display_unlock();
 }
 
-/* Task dedicato: aggiorna continuamente l'anteprima sul display, il
+/* Aggiorna continuamente l'anteprima sul display, il
  * piu' velocemente possibile, per un'immagine fluida. Gira in parallelo
  * a acquisition_loop_task (pulsanti/invio), senza interferire con essa. */
 static void camera_preview_task(void *pvParameters) {
@@ -269,7 +229,7 @@ static void capture_photo_on_demand(void) {
     esp_camera_fb_return(pic);
 }
 
-/* ---------- Connessione WiFi (stesso schema del Gateway) ---------- */
+/* Connessione WiFi (stesso schema del Gateway) */
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                 int32_t event_id, void *event_data) {
@@ -329,7 +289,7 @@ static void init_wifi(void) {
     }
 }
 
-/* ---------- Analisi dell'indirizzo MAC del Gateway (da stringa a byte) ---------- */
+/* Analisi dell'indirizzo MAC del Gateway (da stringa a byte) */
 
 static bool parse_mac_address(const char *mac_str, uint8_t *mac_bytes) {
     int values[6];
@@ -345,7 +305,7 @@ static bool parse_mac_address(const char *mac_str, uint8_t *mac_bytes) {
     return true;
 }
 
-/* ---------- Callback di conferma invio ESP-NOW ---------- */
+/* Callback di conferma invio ESP-NOW */
 
 static void on_esp_now_data_sent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
@@ -385,14 +345,14 @@ static void init_esp_now(void) {
              CONFIG_BPA_GATEWAY_MAC_ADDR);
 }
 
-/* ---------- Invio ciclico dei pacchetti 'reference' ---------- */
+/* Invio ciclico dei pacchetti 'reference' */
 
 static void send_reference_packet(uint32_t seq_num, const char *image_ref) {
     esp_now_packet_t packet = {
         .node_id = (uint8_t)CONFIG_BPA_NODE_ID,
         .seq_num = seq_num,
         .mode = MODE_REFERENCE,
-        .timestamp = 0, // non affidabile senza RTC/NTP - vedi stessa nota nel Gateway
+        .timestamp = 0, // non affidabile senza RTC/NTP
     };
     strncpy(packet.image_ref, image_ref, sizeof(packet.image_ref) - 1);
     packet.crc = compute_packet_crc(&packet);

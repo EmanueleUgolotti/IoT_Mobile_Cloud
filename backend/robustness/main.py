@@ -1,23 +1,22 @@
-"""
-Endpoint HTTP per l'esecuzione di attacchi adversarial sul modello VGG16.
+# Endpoint HTTP per l'esecuzione di attacchi adversarial sul modello VGG16.
 
-Questo servizio gestisce direttamente gli attacchi basati su ART
-(Boundary, HSJ, ZOO), che usano solo TensorFlow. L'attacco SimBA
-(basato su PyTorch) viene invece INOLTRATO al servizio separato
-robustness-simba: TensorFlow e PyTorch importati nello stesso processo
-causano un crash (segmentation fault) dentro Docker, verificato
-empiricamente - vedi decisions-log per i dettagli della diagnosi.
-Questo servizio non importa mai PyTorch, quindi il conflitto non puo'
-piu' verificarsi.
+# Questo servizio gestisce direttamente gli attacchi basati su ART
+# (Boundary, HSJ, ZOO), che usano solo TensorFlow. L'attacco SimBA
+# (basato su PyTorch) viene invece INOLTRATO al servizio separato
+# robustness-simba: TensorFlow e PyTorch importati nello stesso processo
+# causano un crash (segmentation fault) dentro Docker, verificato
+# empiricamente - vedi decisions-log per i dettagli della diagnosi.
+# Questo servizio non importa mai PyTorch, quindi il conflitto non puo'
+# piu' verificarsi.
 
-Espone anche /robustness/predict, un endpoint "interno" (nel senso che
-serve al servizio robustness-simba, non pensato per l'app) che risponde
-solo con le probabilita' di classificazione, senza eseguire nessun
-attacco - usato da SimBA per interrogare il modello mentre esplora le
-perturbazioni, senza dover caricare TensorFlow nel proprio container.
+# Espone anche /robustness/predict, un endpoint "interno" (nel senso che
+# serve al servizio robustness-simba, non pensato per l'app) che risponde
+# solo con le probabilita' di classificazione, senza eseguire nessun
+# attacco - usato da SimBA per interrogare il modello mentre esplora le
+# perturbazioni, senza dover caricare TensorFlow nel proprio container.
 
-Il modello viene caricato una sola volta all'avvio del servizio.
-"""
+# Il modello viene caricato una sola volta all'avvio del servizio.
+
 
 import base64
 import os
@@ -174,16 +173,12 @@ def attack(request: AttackRequest, x_api_key: str | None = Header(default=None))
 
 @app.post("/robustness/predict", response_model=PredictResponse)
 async def predict(request: PredictRequest, x_api_key: str | None = Header(default=None)):
-    """
-    Endpoint interno: risponde solo con le probabilita' di classificazione
-    per un batch di immagini, senza eseguire nessun attacco. Usato dal
-    servizio robustness-simba per interrogare il modello VGG16 senza
-    dover caricare TensorFlow nel proprio container.
-
-    NOTA: e' rimasto "async def" (a differenza di /robustness/attack sopra)
-    perche' e' rapido (una singola inferenza, <1s) - non ha bisogno del
-    thread pool per non bloccare il servizio.
-    """
+    
+    # Endpoint interno: risponde solo con le probabilita' di classificazione
+    # per un batch di immagini, senza eseguire nessun attacco. Usato dal
+    # servizio robustness-simba per interrogare il modello VGG16 senza
+    # dover caricare TensorFlow nel proprio container.
+    
     import time
     t0 = time.time()
     print(f"[/robustness/predict] richiesta ricevuta, {len(request.images_data)} immagini", flush=True)

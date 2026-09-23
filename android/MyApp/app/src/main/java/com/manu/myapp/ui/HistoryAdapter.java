@@ -20,6 +20,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Adapter per la lista della cronologia. Ogni riga mostra una miniatura
@@ -37,6 +39,13 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
 
     private final List<HistoryItem> items;
     private final OnDeleteRequestListener deleteListener;
+
+    // Decodifica le miniature su thread separati dal principale - farlo
+    // in onBindViewHolder in modo sincrono causava un rallentamento
+    // visibile (fotogrammi persi) proprio durante l'animazione di
+    // passaggio a questa schermata, dato che il thread principale doveva
+    // sia animare la transizione sia decodificare piu' immagini insieme.
+    private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(4);
 
     public HistoryAdapter(List<HistoryItem> items, OnDeleteRequestListener deleteListener) {
         this.items = items;
@@ -67,12 +76,31 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
         holder.textTime.setText(time);
 
         if (item.imagePath != null) {
-            // Decodifica a risoluzione ridotta per la miniatura, per non
-            // caricare l'immagine intera in memoria per ogni riga della lista
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inSampleSize = 4;
-            Bitmap thumbnail = BitmapFactory.decodeFile(item.imagePath, options);
-            holder.imageThumbnail.setImageBitmap(thumbnail);
+            // Svuota subito la miniatura (evita di mostrare per un istante
+            // quella riciclata da una riga precedente, mentre la nuova
+            // sta ancora caricando).
+            holder.imageThumbnail.setImageBitmap(null);
+
+            String pathForThisBind = item.imagePath;
+            holder.imageThumbnail.setTag(pathForThisBind);
+
+            thumbnailExecutor.execute(() -> {
+                // Decodifica a risoluzione ridotta per la miniatura, per non
+                // caricare l'immagine intera in memoria per ogni riga della lista
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inSampleSize = 4;
+                Bitmap thumbnail = BitmapFactory.decodeFile(pathForThisBind, options);
+
+                holder.itemView.post(() -> {
+                    // Con lo scroll veloce, questa ViewHolder potrebbe nel
+                    // frattempo essere gia' stata riassegnata a un'altra
+                    // riga - il controllo sul tag evita di mostrare
+                    // l'immagine sbagliata nel posto sbagliato.
+                    if (pathForThisBind.equals(holder.imageThumbnail.getTag())) {
+                        holder.imageThumbnail.setImageBitmap(thumbnail);
+                    }
+                });
+            });
         } else {
             holder.imageThumbnail.setImageBitmap(null);
         }

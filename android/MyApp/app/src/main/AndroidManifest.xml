@@ -4,9 +4,9 @@
 
     <!-- Permette all'app di accedere a Internet per comunicare con dispositivi e servizi esterni -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /><!-- fa girare gli attacchi in background-->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" /> <!--dichiara che tipo di servizio sta girando -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> <!-- Serve per mostrare le notifiche vere-->
 
     <application
         android:name=".BpaApplication"

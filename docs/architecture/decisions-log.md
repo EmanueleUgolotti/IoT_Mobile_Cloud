@@ -689,3 +689,26 @@ end-to-end (scatto -> conversione -> frammentazione -> invio radio ->
 ricezione -> ricomposizione -> verifica CRC -> inoltro riuscito sia a
 Cloud sia a Mobile), confermato dall'utente. Capitolo della
 frammentazione/ricezione delle foto vere considerato chiuso.
+
+
+
+
+I due ESP32 devono essere fisicamente vicini per via della portata radio di ESP-NOW. Nell'implementazione attuale, anche il Cloud e il telefono devono trovarsi sulla stessa rete locale, perché usiamo indirizzi IP privati configurati direttamente — l'architettura non lo impedirebbe in linea di principio (basterebbe un indirizzo pubblico o una VPN), ma non è quello che abbiamo implementato per questo progetto.
+
+
+"Abbiamo usato principalmente onCreate per l'inizializzazione, senza necessità di sovrascrivere le altre fasi, dato che le nostre schermate non gestiscono risorse che richiedono un rilascio esplicito alla pausa (fotocamera, sensori, connessioni persistenti). Per gli aggiornamenti in tempo reale (Home) abbiamo usato LiveData, che gestisce automaticamente la sospensione/ripresa in base al ciclo di vita. Per un'operazione che deve sopravvivere al cambio di schermata (l'attacco adversarial), abbiamo usato un Foreground Service, con un ciclo di vita indipendente da quello delle Activity."
+
+
+"Non abbiamo mai lavorato direttamente con MotionEvent/TouchEvent — sono il livello più basso e grezzo dell'input touch, sopra cui sono costruiti sia OnClickListener sia GestureDetector. Abbiamo sempre usato OnClickListener, l'astrazione più alta e semplice, sufficiente per tutte le interazioni della nostra app (nessun gesto complesso, nessun disegno personalizzato che richiedesse accesso ai dati grezzi del tocco)
+
+
+
+Non abbiamo creato né interrogato direttamente alcun ContentProvider personalizzato — i nostri dati (Cronologia) sono gestiti con SQLite diretto tramite SQLiteOpenHelper, sufficiente dato che nessun'altra app ha bisogno di accedervi. L'unico punto di contatto indiretto con un ContentProvider è quello di sistema (MediaStore), usato implicitamente dal selettore di immagini della galleria quando l'utente sceglie una foto per il Test Manuale — ma vi accediamo tramite Uri e ContentResolver, non con query dirette a un provide
+Un ContentProvider è pensato principalmente per condividere dati tra app diverse, tramite un'interfaccia URI standardizzata con controllo dei permessi — un caso d'uso che il progetto non ha mai avuto, dato che la Cronologia è un dato privato dell'app, mai letto da altre applicazioni. Introdurlo avrebbe aggiunto complessità (classe Contract, UriMatcher, implementazione di cinque metodi obbligatori) senza alcun beneficio pratico, quando SQLiteOpenHelper offre lo stesso accesso ai dati con un'interfaccia molto più diretta per un uso puramente interno.
+
+Decisione: le immagini restano nello storage privato dell'app, non nella Galleria pubblica
+È stata valutata la possibilità di salvare le immagini (scattate o ricevute) direttamente nella Galleria pubblica del dispositivo, per renderle visibili anche fuori dall'app. La scelta finale è stata di non farlo, per motivi di design legati al dominio applicativo, non solo di complessità implementativa:
+Mescolare immagini di analisi forense con le foto personali dell'utente (vacanze, screenshot, ecc.) non è coerente con la natura professionale/specialistica dell'applicazione.
+La Galleria è tipicamente sincronizzata automaticamente da servizi cloud personali (es. Google Foto) — un'immagine di analisi finirebbe fuori dal controllo dell'app, in un contesto (backup cloud personale dell'utente) concettualmente estraneo a un caso d'uso forense.
+Tenere questi dati separati dai contenuti personali dell'utente è, guardando a un contesto reale (non solo alla demo universitaria), la scelta più corretta, non un limite da correggere.
+Per il bisogno legittimo di poter comunque condividere una singola immagine fuori dall'app (es. per allegarla a un'email o inviarla), è stata implementata una funzione di condivisione puntuale tramite FileProvider, che espone temporaneamente il singolo file richiesto ad altre app, senza copiarlo permanentemente in uno spazio pubblico e senza alterare l'architettura di storage esistente.

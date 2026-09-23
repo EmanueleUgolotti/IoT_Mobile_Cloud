@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dice al FileProvider quale sottocartella dello storage privato
+     dell'app puo' essere condivisa temporaneamente con altre app -
+     solo "history_images/" (dove ImageStorage salva i file), nient'altro. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="history_images" path="history_images/" />
+</paths>

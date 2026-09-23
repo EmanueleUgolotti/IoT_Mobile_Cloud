@@ -140,4 +140,7 @@
     <string name="cloud_live_result_subtitle">%1$s (%2$.1f%%)</string>
     <string name="cloud_live_failure_title">Scatto fallito - nodo %1$d, seq %2$d</string>
     <string name="cloud_live_failure_subtitle">Motivo: %1$s</string>
+
+    <!-- Condivisione -->
+    <string name="share_button">Condividi</string>
 </resources>

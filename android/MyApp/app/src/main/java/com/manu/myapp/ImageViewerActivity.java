@@ -3,6 +3,7 @@ package com.manu.myapp;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.widget.Button;
 import android.widget.ImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -42,6 +43,13 @@ public class ImageViewerActivity extends AppCompatActivity {
             if (bitmap != null) {
                 imageView.setImageBitmap(bitmap);
             }
+        }
+
+        Button buttonShare = findViewById(R.id.buttonShareViewer);
+        if (imagePath != null) {
+            buttonShare.setOnClickListener(v -> ShareUtils.shareImage(this, imagePath));
+        } else {
+            buttonShare.setEnabled(false);
         }
     }
 }

@@ -13,6 +13,16 @@
         android:background="@color/background_surface"
         app:titleTextColor="@color/text_primary" />
 
+    <Button
+        android:id="@+id/buttonShareViewer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_margin="12dp"
+        android:backgroundTint="@color/primary"
+        android:textColor="@color/text_primary"
+        android:text="@string/share_button" />
+
     <ImageView
         android:id="@+id/imageViewerFull"
         android:layout_width="match_parent"

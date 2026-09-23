@@ -19,6 +19,15 @@
             app:titleTextColor="@color/text_primary"
             android:layout_marginBottom="16dp" />
 
+        <Button
+            android:id="@+id/buttonShareDetail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/text_primary"
+            android:text="@string/share_button" />
+
         <TextView
             android:id="@+id/textDetailFileName"
             android:layout_width="wrap_content"

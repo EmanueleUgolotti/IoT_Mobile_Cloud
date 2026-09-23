@@ -11,7 +11,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
@@ -66,6 +65,7 @@ public class ResultDetailActivity extends AppCompatActivity {
         float[] probabilities;
         Bitmap image;
         String note;
+        String imagePathForShare = null; // null se non disponibile (caso aperto dalla Home)
 
         if (getIntent().hasExtra(EXTRA_LABEL)) {
             // Aperta dalla Cronologia o dal Test manuale: dati passati via Intent
@@ -77,6 +77,7 @@ public class ResultDetailActivity extends AppCompatActivity {
             String imagePath = getIntent().getStringExtra(EXTRA_IMAGE_PATH);
             image = imagePath != null ? BitmapFactory.decodeFile(imagePath) : null;
             note = getIntent().getStringExtra(EXTRA_NOTE);
+            imagePathForShare = imagePath;
         } else {
             // Aperta dalla Home: dati dall'ultimo risultato in memoria
             AppState.LastResult result = AppState.getInstance().lastResult.getValue();
@@ -99,6 +100,17 @@ public class ResultDetailActivity extends AppCompatActivity {
         ImageView imageDetail = findViewById(R.id.imageDetail);
         if (image != null) {
             imageDetail.setImageBitmap(image);
+        }
+
+        Button buttonShare = findViewById(R.id.buttonShareDetail);
+        if (imagePathForShare != null) {
+            String pathToShare = imagePathForShare;
+            buttonShare.setOnClickListener(v -> ShareUtils.shareImage(this, pathToShare));
+        } else {
+            // Aperta dalla Home: non abbiamo un percorso file diretto
+            // (solo il Bitmap gia' in memoria) - condivisione non
+            // disponibile in questo caso specifico.
+            buttonShare.setEnabled(false);
         }
 
         if (probabilities != null) {

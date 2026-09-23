@@ -140,4 +140,7 @@
     <string name="cloud_live_result_subtitle">%1$s (%2$.1f%%)</string>
     <string name="cloud_live_failure_title">Failed capture - node %1$d, seq %2$d</string>
     <string name="cloud_live_failure_subtitle">Reason: %1$s</string>
+
+    <!-- Share -->
+    <string name="share_button">Share</string>
 </resources>

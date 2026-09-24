@@ -18,6 +18,7 @@ models/checkpoints/
 *.csv
 !docs/**/*.csv
 datasets/
+data/captured
 
 # ---------- Docker ----------
 docker/**/.env

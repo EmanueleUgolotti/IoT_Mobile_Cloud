@@ -15,6 +15,8 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -25,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.manu.myapp.Classifier;
 import com.manu.myapp.CloudApiClient;
+import com.manu.myapp.CloudUploadHelper;
 import com.manu.myapp.HistoryDbHelper;
 import com.manu.myapp.HistoryItem;
 import com.manu.myapp.ImageStorage;
@@ -35,6 +38,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,12 +50,13 @@ import java.util.concurrent.Executors;
  * eliminarla (record + file immagine), con conferma. La casella di
  * ricerca filtra per nome file o per contenuto della nota.
  *
- * Il pulsante "Aggiorna dal Cloud" recupera le classificazioni gia'
- * fatte lato backend Cloud (GET /cloud/results) e le aggiunge qui,
- * fonte "Cloud" - non c'e' una schermata separata per i risultati
- * Cloud: una volta scaricati, sono voci di Cronologia come le altre,
- * cosi' riusano automaticamente ricerca, eliminazione, dettaglio, ecc.
- * senza bisogno di codice apposito.
+ * Il pulsante "Aggiorna dal Cloud" fa la sincronizzazione in ENTRAMBE
+ * le direzioni, mostrando un'unica barra di avanzamento che copre
+ * entrambe le fasi in sequenza:
+ * 1. Manda al Cloud le voci create localmente sul telefono e non
+ *    ancora presenti li' (vedi CloudUploadHelper).
+ * 2. Recupera le classificazioni gia' fatte lato backend Cloud
+ *    (GET /cloud/results) e le aggiunge qui, fonte "Cloud".
  */
 public class HistoryFragment extends Fragment {
 
@@ -59,8 +64,15 @@ public class HistoryFragment extends Fragment {
 
     private RecyclerView recyclerHistory;
     private EditText editSearch;
+    private ProgressBar progressSync;
+    private TextView textSyncPercent;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String currentQuery = "";
+
+    // Tiene l'ultima lista caricata, per poterla mostrare SUBITO al
+    // prossimo onResume (anche se non freschissima) invece di partire
+    // da una lista vuota in attesa dei dati.
+    private List<HistoryItem> cachedItems = new ArrayList<>();
 
     @Nullable
     @Override
@@ -75,6 +87,10 @@ public class HistoryFragment extends Fragment {
 
         recyclerHistory = view.findViewById(R.id.recyclerHistory);
         recyclerHistory.setLayoutManager(new LinearLayoutManager(getContext()));
+        recyclerHistory.setAdapter(new HistoryAdapter(cachedItems, this::confirmDelete));
+
+        progressSync = view.findViewById(R.id.progressSync);
+        textSyncPercent = view.findViewById(R.id.textSyncPercent);
 
         editSearch = view.findViewById(R.id.editSearch);
         editSearch.addTextChangedListener(new TextWatcher() {
@@ -102,7 +118,7 @@ public class HistoryFragment extends Fragment {
         });
 
         Button buttonSyncCloud = view.findViewById(R.id.buttonSyncCloud);
-        buttonSyncCloud.setOnClickListener(v -> syncFromCloud());
+        buttonSyncCloud.setOnClickListener(v -> syncWithCloud());
 
         loadHistory();
     }
@@ -122,8 +138,6 @@ public class HistoryFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // Ricarica ogni volta che si torna su questa schermata, cosi'
-        // eventuali nuove classificazioni arrivate nel frattempo compaiono
         loadHistory();
     }
 
@@ -143,6 +157,7 @@ public class HistoryFragment extends Fragment {
                 if (getView() == null) {
                     return; // fragment non piu' visibile
                 }
+                cachedItems = items;
                 recyclerHistory.setAdapter(new HistoryAdapter(items, this::confirmDelete));
             });
         });
@@ -174,13 +189,13 @@ public class HistoryFragment extends Fragment {
             }
 
             Handler mainHandler = new Handler(Looper.getMainLooper());
-            mainHandler.post(this::loadHistory); // ricarica la lista aggiornata
+            mainHandler.post(this::loadHistory);
         });
     }
 
-    // --- Sincronizzazione con il Cloud ---
+    // --- Sincronizzazione con il Cloud (entrambe le direzioni, con barra di avanzamento) ---
 
-    private void syncFromCloud() {
+    private void syncWithCloud() {
         if (getContext() == null) {
             return;
         }
@@ -188,22 +203,53 @@ public class HistoryFragment extends Fragment {
         String cloudApiUrl = SettingsManager.getCloudApiUrl(requireContext());
 
         executor.execute(() -> {
+            HistoryDbHelper db = new HistoryDbHelper(requireContext());
+
+            // Conosciamo in anticipo quante voci ci sono da mandare, cosi'
+            // possiamo calcolare una percentuale complessiva insieme alla
+            // fase di scaricamento sotto (che conosceremo tra poco).
+            List<HistoryItem> pendingUpload = db.getUnsyncedItems();
+            int uploadTotal = pendingUpload.size();
+
+            JSONArray results;
+            int downloadTotal;
+            try {
+                results = CloudApiClient.fetchRecentResults(cloudApiUrl, 20);
+                downloadTotal = results.length();
+            } catch (Exception e) {
+                results = new JSONArray();
+                downloadTotal = 0;
+            }
+
+            int overallTotal = uploadTotal + downloadTotal;
+
+            if (overallTotal > 0) {
+                showProgressBar();
+            }
+
+            // Contatore condiviso tra le due fasi (girano una dopo l'altra
+            // sullo stesso thread, nessun bisogno di sincronizzazione).
+            int[] processedSoFar = {0};
+            int finalOverallTotal = overallTotal;
+
+            // 1. Invio verso il Cloud
+            int uploadedCount = CloudUploadHelper.uploadItems(requireContext(), pendingUpload, cloudApiUrl,
+                    (processed, total) -> {
+                        processedSoFar[0]++;
+                        updateProgress(processedSoFar[0], finalOverallTotal);
+                    });
+
+            // 2. Scaricamento dal Cloud (comportamento gia' esistente)
             int syncedCount = 0;
             int errorCount = 0;
 
             try {
-                JSONArray results = CloudApiClient.fetchRecentResults(cloudApiUrl, 20);
-                HistoryDbHelper db = new HistoryDbHelper(requireContext());
-
                 for (int i = 0; i < results.length(); i++) {
                     JSONObject result = results.getJSONObject(i);
 
-                    // Per ora sincronizzio solo i risultati in modalita'
-                    // 'reference' (hanno image_ref/dataset_id, quindi
-                    // l'immagine e' scaricabile da /dataset/image). I
-                    // risultati 'captured' non hanno ancora un endpoint
-                    // di download dedicato lato backend - saltati per ora.
                     if (result.isNull("image_ref") || result.isNull("dataset_id")) {
+                        processedSoFar[0]++;
+                        updateProgress(processedSoFar[0], finalOverallTotal);
                         continue;
                     }
 
@@ -211,7 +257,9 @@ public class HistoryFragment extends Fragment {
                     String datasetId = result.getString("dataset_id");
 
                     if (db.existsWithFileNameAndSource(imageRef, SOURCE_CLOUD)) {
-                        continue; // gia' sincronizzato in precedenza
+                        processedSoFar[0]++;
+                        updateProgress(processedSoFar[0], finalOverallTotal);
+                        continue;
                     }
 
                     try {
@@ -220,15 +268,14 @@ public class HistoryFragment extends Fragment {
                         Bitmap bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
                         if (bitmap == null) {
                             errorCount++;
+                            processedSoFar[0]++;
+                            updateProgress(processedSoFar[0], finalOverallTotal);
                             continue;
                         }
 
                         String predictedLabel = result.getString("predicted_label");
                         float[] probabilities = jsonToOrderedArray(result.getJSONObject("probabilities"));
 
-                        // Tra le probabilita' per classe, prendo quella
-                        // della classe predetta come "confidenza" - stesso
-                        // significato che ha gia' altrove nell'app.
                         float confidence = 0f;
                         for (int c = 0; c < Classifier.CLASS_NAMES.length; c++) {
                             if (Classifier.CLASS_NAMES[c].equals(predictedLabel)) {
@@ -238,60 +285,86 @@ public class HistoryFragment extends Fragment {
                         }
 
                         String imagePath = ImageStorage.save(requireContext(), bitmap, imageRef);
-
-                        // Uso il momento della sincronizzazione come
-                        // timestamp (non l'orario originale della
-                        // classificazione sul server) - evita di dover
-                        // analizzare il formato data ISO del backend,
-                        // semplificazione accettabile per questo scopo.
                         long timestamp = System.currentTimeMillis();
 
                         db.insert(imageRef, predictedLabel, confidence, probabilities,
-                                SOURCE_CLOUD, timestamp, imagePath);
+                                SOURCE_CLOUD, timestamp, imagePath, true);
                         syncedCount++;
 
                     } catch (Exception e) {
                         errorCount++;
                     }
+
+                    processedSoFar[0]++;
+                    updateProgress(processedSoFar[0], finalOverallTotal);
                 }
 
             } catch (Exception e) {
                 errorCount++;
             }
 
+            int finalUploadedCount = uploadedCount;
             int finalSyncedCount = syncedCount;
             int finalErrorCount = errorCount;
             Handler mainHandler = new Handler(Looper.getMainLooper());
             mainHandler.post(() -> {
-                showSyncResult(finalSyncedCount, finalErrorCount);
+                hideProgressBar();
+                showSyncResult(finalUploadedCount, finalSyncedCount, finalErrorCount);
                 loadHistory();
             });
         });
     }
 
-    private void showSyncResult(int syncedCount, int errorCount) {
+    private void showProgressBar() {
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+        mainHandler.post(() -> {
+            if (getView() == null) {
+                return;
+            }
+            progressSync.setProgress(0);
+            progressSync.setVisibility(View.VISIBLE);
+            textSyncPercent.setText("0%");
+            textSyncPercent.setVisibility(View.VISIBLE);
+        });
+    }
+
+    private void updateProgress(int processed, int total) {
+        int percent = total > 0 ? (processed * 100 / total) : 100;
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+        mainHandler.post(() -> {
+            if (getView() == null) {
+                return;
+            }
+            progressSync.setProgress(percent);
+            textSyncPercent.setText(percent + "%");
+        });
+    }
+
+    private void hideProgressBar() {
+        if (getView() == null) {
+            return;
+        }
+        progressSync.setVisibility(View.GONE);
+        textSyncPercent.setVisibility(View.GONE);
+    }
+
+    private void showSyncResult(int uploadedCount, int syncedCount, int errorCount) {
         if (getContext() == null) {
             return;
         }
 
         String message;
-        if (syncedCount == 0 && errorCount == 0) {
+        if (uploadedCount == 0 && syncedCount == 0 && errorCount == 0) {
             message = getString(R.string.history_sync_cloud_up_to_date);
         } else if (errorCount == 0) {
-            message = getString(R.string.history_sync_cloud_success, syncedCount);
+            message = getString(R.string.history_sync_cloud_success_full, uploadedCount, syncedCount);
         } else {
             message = getString(R.string.history_sync_cloud_error);
         }
 
-        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
     }
 
-    /**
-     * Converte un JSONObject {classe: probabilita'} in un array ordinato
-     * secondo Classifier.CLASS_NAMES, cosi' l'ordine e' sempre coerente
-     * con quello usato ovunque nell'app (stesso approccio gia' usato in
-     * AdversarialTestFragment per lo stesso identico bisogno).
-     */
     private float[] jsonToOrderedArray(JSONObject probs) throws Exception {
         float[] result = new float[Classifier.CLASS_NAMES.length];
         for (int i = 0; i < Classifier.CLASS_NAMES.length; i++) {

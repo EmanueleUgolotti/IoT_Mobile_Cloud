@@ -143,4 +143,7 @@
 
     <!-- Share -->
     <string name="share_button">Share</string>
+
+    <!-- History sync from Cloud -->
+    <string name="history_sync_cloud_success_full">%1$d sent to Cloud, %2$d downloaded from Cloud</string>
 </resources>

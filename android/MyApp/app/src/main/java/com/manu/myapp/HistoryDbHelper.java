@@ -22,7 +22,7 @@ import java.util.List;
 public class HistoryDbHelper extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "history.db";
-    private static final int DB_VERSION = 2; // v2: aggiunta colonna "note"
+    private static final int DB_VERSION = 3; // v3: aggiunta colonna "synced_to_cloud"
 
     private static final String TABLE = "history";
     private static final String COL_ID = "id";
@@ -34,6 +34,11 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     private static final String COL_TIMESTAMP = "timestamp_millis";
     private static final String COL_IMAGE_PATH = "image_path";
     private static final String COL_NOTE = "note";
+    // 0 = creata localmente, non ancora mandata al Cloud; 1 = gia'
+    // presente sul Cloud (o perche' arrivata da li', o perche' gia'
+    // sincronizzata in precedenza) - usata dalla sincronizzazione
+    // telefono->Cloud per sapere quali voci mandare.
+    private static final String COL_SYNCED_TO_CLOUD = "synced_to_cloud";
 
     public HistoryDbHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -50,7 +55,8 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
                 COL_SOURCE + " TEXT, " +
                 COL_TIMESTAMP + " INTEGER, " +
                 COL_IMAGE_PATH + " TEXT, " +
-                COL_NOTE + " TEXT)");
+                COL_NOTE + " TEXT, " +
+                COL_SYNCED_TO_CLOUD + " INTEGER DEFAULT 0)");
     }
 
     @Override
@@ -58,6 +64,9 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
         if (oldVersion < 2) {
             // Aggiunge la colonna nota senza perdere i dati gia' salvati
             db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN " + COL_NOTE + " TEXT");
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN " + COL_SYNCED_TO_CLOUD + " INTEGER DEFAULT 0");
         }
     }
 
@@ -98,7 +107,10 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Inserisce una nuova classificazione nella cronologia.
+     * Inserisce una nuova classificazione nella cronologia, come
+     * "non ancora sincronizzata verso il Cloud" (comportamento di
+     * default corretto per qualunque voce creata solo localmente -
+     * scattata sul telefono, o classificata con "Test manuale").
      * Va chiamato fuori dal thread principale (es. dal thread del server
      * NanoHTTPD, che non e' il thread UI).
      *
@@ -107,6 +119,19 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
      */
     public long insert(String fileName, String label, float confidence,
                        float[] probabilities, String source, long timestampMillis, String imagePath) {
+        return insert(fileName, label, confidence, probabilities, source, timestampMillis, imagePath, false);
+    }
+
+    /**
+     * Variante di insert() che permette di specificare esplicitamente
+     * se la voce e' gia' presente sul Cloud (es. appena scaricata da
+     * li') - in quel caso non ha senso marcarla come "da sincronizzare",
+     * altrimenti la sincronizzazione verso il Cloud proverebbe a
+     * rimandare indietro qualcosa che viene gia' da li'.
+     */
+    public long insert(String fileName, String label, float confidence,
+                       float[] probabilities, String source, long timestampMillis, String imagePath,
+                       boolean alreadyOnCloud) {
         SQLiteDatabase db = getWritableDatabase();
 
         ContentValues values = new ContentValues();
@@ -118,8 +143,33 @@ public class HistoryDbHelper extends SQLiteOpenHelper {
         values.put(COL_TIMESTAMP, timestampMillis);
         values.put(COL_IMAGE_PATH, imagePath);
         values.put(COL_NOTE, "");
+        values.put(COL_SYNCED_TO_CLOUD, alreadyOnCloud ? 1 : 0);
 
         return db.insert(TABLE, null, values);
+    }
+
+    /**
+     * Restituisce le voci create localmente e non ancora mandate al
+     * Cloud - usato dalla sincronizzazione telefono->Cloud per sapere
+     * cosa mandare. Le voci gia' arrivate dal Cloud, o gia' mandate in
+     * precedenza, non compaiono qui.
+     */
+    public List<HistoryItem> getUnsyncedItems() {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE, null, COL_SYNCED_TO_CLOUD + " = 0", null, null, null,
+                COL_TIMESTAMP + " ASC");
+        return cursorToList(cursor);
+    }
+
+    /**
+     * Segna una voce come ormai presente sul Cloud, dopo un invio
+     * riuscito - non verra' piu' proposta dalla prossima sincronizzazione.
+     */
+    public void markSyncedToCloud(long id) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COL_SYNCED_TO_CLOUD, 1);
+        db.update(TABLE, values, COL_ID + " = ?", new String[]{String.valueOf(id)});
     }
 
     /**

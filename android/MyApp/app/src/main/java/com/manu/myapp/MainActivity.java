@@ -90,11 +90,11 @@ public class MainActivity extends AppCompatActivity {
         try {
             server.start();
             Log.i(TAG, "Server avviato sulla porta " + serverPort);
-            AppState.getInstance().serverRunning.postValue(true);
+            AppState.getInstance().serverRunning.postValue(true); //verde
             AppState.getInstance().serverPort.postValue(serverPort);
         } catch (Exception e) {
             Log.e(TAG, "Errore avvio server", e);
-            AppState.getInstance().serverRunning.postValue(false);
+            AppState.getInstance().serverRunning.postValue(false); //rosso
         }
     }
 

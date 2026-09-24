@@ -143,4 +143,7 @@
 
     <!-- Condivisione -->
     <string name="share_button">Condividi</string>
+
+    <!-- Sincronizzazione cronologia del Cloud  -->
+    <string name="history_sync_cloud_success_full">%1$d inviate al Cloud, %2$d scaricate dal Cloud</string>
 </resources>

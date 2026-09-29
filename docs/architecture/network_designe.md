@@ -24,9 +24,8 @@ Il nodo #1 supporta due modalità, selezionabili in configurazione:
 | Modalità | Uso previsto | Cosa viaggia in rete |
 |---|---|---|
 | `reference` | Dataset BPA (bloodstain), e in generale qualunque dataset esistente | Solo un riferimento testuale all'immagine (nome file), l'immagine reale resta nello storage condiviso del backend |
-| `captured` | Demo con acquisizione reale (es. ESP32-CAM che fotografa un oggetto reale, es. da confrontare con classi CIFAR-10-like) | L'immagine catturata (JPEG), frammentata su ESP-NOW |
+| `captured` | Demo e/o acquisizione reale (es. ESP32-CAM che fotografa un oggetto reale, es. da confrontare con classi CIFAR-10-like) | L'immagine catturata (JPEG), frammentata su ESP-NOW |
 
-La modalità `reference` è quella usata per il flusso principale di classificazione BPA. La modalità `captured` è un percorso dimostrativo separato, per mostrare acquisizione hardware reale end-to-end. Il protocollo di frammentazione per `captured` è trattato in un documento/task dedicato, quando l'hardware con fotocamera sarà disponibile; qui si fissa solo il formato del messaggio risultante.
 
 ## 3. Schema ESP-NOW (ESP32 #1 → ESP32 #2)
 
@@ -41,7 +40,7 @@ Payload compatto (limite ESP-NOW ~250 byte):
 | `image_ref` | char[64] | Usato solo se `mode = reference`: nome/riferimento del file nel dataset attivo |
 | `crc` | uint16 | Checksum del pacchetto, per scartare pacchetti corrotti |
 
-Per `mode = captured`, il pacchetto sopra è solo l'header iniziale; i chunk immagine successivi seguono un formato a parte (da definire nel task dedicato alla frammentazione).
+Per `mode = captured`, il pacchetto sopra è solo l'header iniziale; i chunk immagine successivi seguono un formato a parte.
 
 ## 4. Schema HTTP (ESP32 #2 → Mobile/Cloud)
 
@@ -78,9 +77,9 @@ Per `mode = captured`, il pacchetto sopra è solo l'header iniziale; i chunk imm
 ### 4.3 Note sui campi comuni
 
 - `request_id`: generato dal gateway (`node_id` + `seq_num`), identificatore univoco end-to-end per correlare risultati nel database
-- `gateway_timestamp`: assegnato dal gateway (unico punto della catena con un orario affidabile, essendo connesso a rete/NTP)
+- `gateway_timestamp`: assegnato dal gateway 
 - `dataset_id` (solo `reference`): rende il sistema agnostico rispetto al dataset attivo (BPA, CIFAR-10, ecc.), permettendo di cambiarlo via configurazione senza modificare lo schema
-- `retry_attempt`: incrementato ad ogni tentativo di invio dalla coda locale di retry (vedi §6); utile anche come metrica di analisi
+- `retry_attempt`: incrementato ad ogni tentativo di invio dalla coda locale di retry; utile anche come metrica di analisi
 
 La destinazione (mobile vs cloud) non è un campo nel payload: è implicita nell'endpoint HTTP invocato dal gateway (es. `/mobile/ingest` vs `/cloud/ingest`).
 
@@ -104,9 +103,9 @@ Applicata solo sul canale HTTP (gateway → mobile/cloud), non su ESP-NOW: il ca
 | Overhead firmware | Basso (client HTTP semplice) | Più alto (libreria MQTT, connessione persistente, keep-alive) |
 | Componenti aggiuntivi | Nessuno | Richiede un broker (es. Mosquitto) nel backend |
 
-**Decisione: HTTP come protocollo primario.** Il gateway instrada ogni pacchetto verso **una** destinazione decisa (mobile *oppure* cloud, mai entrambe) — è strutturalmente un caso request/response, non un evento broadcast a più consumatori. MQTT sarebbe preferibile se in futuro si volesse notificare più destinatari dello stesso evento senza che il gateway ne conosca l'elenco esplicito (es. cloud per salvataggio + mobile per notifica push in parallelo) — scenario non presente nei requisiti attuali.
+**Decisione: HTTP come protocollo primario.** Il gateway instrada ogni pacchetto verso **una** destinazione decisa (mobile *oppure* cloud) — è strutturalmente un caso request/response, non un evento broadcast a più consumatori. MQTT sarebbe preferibile se in futuro si volesse notificare più destinatari dello stesso evento senza che il gateway ne conosca l'elenco esplicito (es. cloud per salvataggio + mobile per notifica push in parallelo).
 
-MQTT resta una possibile estensione futura (vedi §8), non un fallback per l'assenza di WiFi: MQTT gira comunque su TCP/IP, quindi richiede la stessa infrastruttura di rete di HTTP e non risolve il problema di connettività assente (vedi §7).
+MQTT resta una possibile estensione futura, non un fallback per l'assenza di WiFi: MQTT gira comunque su TCP/IP, quindi richiede la stessa infrastruttura di rete di HTTP e non risolve il problema di connettività assente.
 
 ## 7. Failure modes considerati
 
@@ -122,5 +121,3 @@ MQTT resta una possibile estensione futura (vedi §8), non un fallback per l'ass
 ## 8. Estensioni opzionali (fuori dal core, da valutare solo a progetto stabile)
 
 - Sostituzione/affiancamento di HTTP con MQTT (broker Mosquitto containerizzato)
-- Frammentazione ESP-NOW per la modalità `captured` con acquisizione reale via ESP32-CAM
-- Docker Swarm come estensione del deployment (oltre a Docker Compose)

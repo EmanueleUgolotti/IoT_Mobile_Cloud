@@ -22,15 +22,6 @@ della classificazione.
 Il modello richiede input a 224×224 pixel; l'immagine originale va quindi
 ridimensionata prima dell'inferenza.
 
-- **Python (PIL)**: usa per default l'interpolazione **bicubica**
-- **Android**: `Bitmap.createScaledBitmap` supporta solo l'interpolazione
-  **bilineare** — nessun bicubico nativo disponibile
-
-**Intervento fatto**: `Classifier.java` implementa un ridimensionamento
-bicubico manuale (stesso parametro `a = -0.5` usato da PIL), per allineare
-l'algoritmo tra le due piattaforme. Questo penso abbia ridotto la discrepanza, ma non
-l'ha eliminata — vedi punto successivo.
-
 ### 2. Decodifica JPEG (causa residua, non risolta)
 
 Prima ancora del ridimensionamento, il file immagine (JPEG) deve essere

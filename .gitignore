@@ -62,5 +62,6 @@ models/*.keras
 
 # ---------- documenti e note ----------
 docs/note.txt
-
+docs/backend-api-summary.md
+docs/decision-log.md
 *.zip

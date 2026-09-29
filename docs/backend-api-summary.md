@@ -8,11 +8,8 @@ dati definito in `docs/architecture/network-design.md`, e le persiste su
 database. È il primo anello della catena "Cloud" nell'architettura generale:
 
 ```
-ESP32 #2 (Gateway) --HTTP--> [ QUESTO COMPONENTE ] --> Database
+ESP32 #2 (Gateway) --HTTP--> Database
 ```
-
-Fuori dallo scope di questo componente, volutamente: l'inferenza ML sulle
-immagini (task successivo, separato).
 
 ## Componenti implementati
 
@@ -34,14 +31,6 @@ gestisce con logica separata:
 Ogni payload viene validato contro lo schema atteso (tipi, campi
 obbligatori) prima di qualunque elaborazione: un payload malformato viene
 respinto con un errore esplicito, non processato parzialmente.
-
-### 2. Autenticazione toggleable
-
-Il controllo dell'header `X-API-Key` è applicato a ogni chiamata a
-`/cloud/ingest`, ma è attivo solo se la variabile d'ambiente
-`AUTH_ENABLED=true` è impostata. Questo permette di dimostrare in demo sia
-lo scenario "sistema aperto" sia lo scenario "sistema protetto", come
-discusso nel documento di design.
 
 ### 3. Database — `backend/database/init.sql`
 

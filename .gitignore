@@ -64,4 +64,5 @@ models/*.keras
 docs/note.txt
 docs/backend-api-summary.md
 docs/decision-log.md
+docs/roadmap.md
 *.zip

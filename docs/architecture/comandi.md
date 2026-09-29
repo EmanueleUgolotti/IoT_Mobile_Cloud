@@ -67,7 +67,7 @@ menu principale), premi Invio per entrarci. Da li' puoi impostare:
 Salva con `S`, poi Invio; esci con `Q`.
 
 **Nota sulla rete**: reti pubbliche con portale di accesso via browser
-(WiFi cittadini/regionali, molte reti universitarie) NON funzionano per
+(WiFi cittadini/regionali, e reti universitarie) NON funzionano per
 il firmware - l'ESP32 non puo' gestire quel tipo di login. Usa una rete
 domestica o l'hotspot di un telefono.
 
@@ -193,13 +193,8 @@ docker compose stop api db
 ```bash
 ip addr show | grep "inet " | grep -v 127.0.0.1
 ```
-Cerca l'indirizzo della tua interfaccia WiFi attuale (cambia a seconda
-della rete a cui sei connesso in quel momento).
+Cerca l'indirizzo della tua interfaccia WiFi attuale.
 
-### IP del telefono
-
-Impostazioni del telefono → WiFi → tocca la rete connessa → l'indirizzo
-IP e' mostrato li'.
 
 ### Regola generale
 
